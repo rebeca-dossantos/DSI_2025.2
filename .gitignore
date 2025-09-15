@@ -1,0 +1,66 @@
+# Arquivos e pastas do sistema
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Pastas de dependências
+node_modules/
+venv/
+env/
+.env
+.venv
+
+# Arquivos de log
+*.log
+
+# Arquivos de IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Arquivos de build
+dist/
+build/
+out/
+
+# Arquivos temporários
+*.tmp
+*.temp
+~$*
+
+# Arquivos de backup
+*.bak
+*.swp
+*.swo
+
+# Arquivos de configuração locais
+.env.local
+.env.*.local
+
+# Regras específicas para React Native
+android/
+ios/
+*.keystore
+*.jks
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*.xcuserstate
+*.xcodeproj/
+*.xcworkspace/
+*.gradle
+*.iml
+*.apk
+*.aab
+*.app
+*.ipa
+metro-cache/
+coverage/
+fastlane/report.xml
+fastlane/test_output/
+fastlane/screenshots/
+fastlane/preview.html
+

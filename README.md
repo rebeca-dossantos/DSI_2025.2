@@ -1,6 +1,4 @@
-# DSI_2025.2
-
-Este repositório inicial contém materiais e códigos para a disciplina de Desenvolvimento de Sistemas de Informação (DSI) - 2025.2.
+## Este repositório inicial contém materiais e códigos para a disciplina de Desenvolvimento de Sistemas de Informação (DSI) - 2025.2.
 
 ## Como usar
 
@@ -8,7 +6,6 @@ Este repositório inicial contém materiais e códigos para a disciplina de Dese
     ```
     git clone https://github.com/rebeca-dossantos/DSI_2025.2.git
     ```
-2. Navegue até a pasta desejada e siga as instruções específicas de cada projeto.
 
 ## Contato
 

@@ -1,4 +1,4 @@
-## Esta branch é referente a funcionalidade da tela de login e cadastro.
+## Desenvolvimento de Sistemas de Informação (DSI) - 2025.2.
 
 ## Como usar
 

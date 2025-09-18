@@ -202,6 +202,41 @@ function RegisterScreen({ navigation }: { navigation: any }) {
           <TouchableOpacity style={styles.button} onPress={handleRegister} accessibilityRole="button">
             <Text style={styles.buttonText}>Criar Conta</Text>
           </TouchableOpacity>
+  <View style={styles.mealsWrapper}>
+  <View style={styles.mealRow}>
+    <Text style={styles.mealIcon}>☕</Text>
+    <View style={styles.mealContent}>
+      <Text style={styles.mealLabel}>Café da manhã</Text>
+      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
+    </View>
+    <TouchableOpacity style={styles.plusBtn}>
+      <Text style={styles.plusText}>+</Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={styles.mealRow}>
+    <Text style={styles.mealIcon}>🍽️</Text>
+    <View style={styles.mealContent}>
+      <Text style={styles.mealLabel}>Almoço</Text>
+      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
+    </View>
+    <TouchableOpacity style={styles.plusBtn}>
+      <Text style={styles.plusText}>+</Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={styles.mealRow}>
+    <Text style={styles.mealIcon}>🌙</Text>
+    <View style={styles.mealContent}>
+      <Text style={styles.mealLabel}>Janta</Text>
+      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
+    </View>
+    <TouchableOpacity style={styles.plusBtn}>
+      <Text style={styles.plusText}>+</Text>
+    </TouchableOpacity>
+  </View>
+</View>
+
 
           <TouchableOpacity
             style={styles.link}
@@ -222,22 +257,66 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.homeInner}>
-      <Text style={styles.homeTitle}>Bem-vindo(a)</Text>
-      <Text style={styles.homeSubtitle}>Você entrou como</Text>
-      <Text style={styles.userEmail}>{userEmail}</Text>
+      <Text style={styles.homeTitle}>Hoje</Text>
 
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Monitor de Queda de Cabelo</Text>
-        <Text style={styles.cardText}>
-          Esta é a tela inicial do protótipo. Mais telas (perfil, coleta, mapa) serão
-          adicionadas conforme o desenvolvimento.
-        </Text>
+      <View style={styles.statsWrapper}>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>Proteínas</Text>
+          <Text style={styles.statValue}>0g</Text>
       </View>
 
+      <View style={styles.statBox}>
+      <Text style={styles.statLabel}>Carboidratos</Text>
+    <Text style={styles.statValue}>0g</Text>
+  </View>
+
+  <View style={styles.statBox}>
+    <Text style={styles.statLabel}>Calorias</Text>
+    <Text style={styles.statValue}>0 kcal</Text>
+  </View>
+</View>
+
+<TouchableOpacity style={styles.addMealBtn}>
+  <Text style={styles.addMealText}>Adicionar lanche</Text>
+</TouchableOpacity>
+<View style={styles.mealsWrapper}>
+  <View style={styles.mealRow}>
+    <Text style={styles.mealIcon}>☕</Text>
+    <View style={styles.mealContent}>
+      <Text style={styles.mealLabel}>Café da manhã</Text>
+      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
+    </View>
+    <TouchableOpacity style={styles.plusBtn}>
+      <Text style={styles.plusText}>+</Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={styles.mealRow}>
+    <Text style={styles.mealIcon}>🍽️</Text>
+    <View style={styles.mealContent}>
+      <Text style={styles.mealLabel}>Almoço</Text>
+      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
+    </View>
+    <TouchableOpacity style={styles.plusBtn}>
+      <Text style={styles.plusText}>+</Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={styles.mealRow}>
+    <Text style={styles.mealIcon}>🌙</Text>
+    <View style={styles.mealContent}>
+      <Text style={styles.mealLabel}>Janta</Text>
+      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
+    </View>
+    <TouchableOpacity style={styles.plusBtn}>
+      <Text style={styles.plusText}>+</Text>
+    </TouchableOpacity>
+  </View>
+</View>
 
       <TouchableOpacity
-        style={[styles.button, { marginTop: 20 }]}
+        style={[styles.button, { marginTop:'auto', marginBottom: 40 }]}
         onPress={() => navigation.replace('Login')}
       >
         <Text style={styles.buttonText}>Sair</Text>
@@ -334,7 +413,6 @@ const styles = StyleSheet.create({
   homeInner: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
   },
   homeTitle: {
     fontSize: 22,
@@ -371,4 +449,89 @@ const styles = StyleSheet.create({
     color: '#444',
     lineHeight: 20,
   },
+  statsWrapper: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 30,
+},
+statBox: {
+  flex: 1,
+  backgroundColor: '#fff',
+  marginHorizontal: 6,
+  paddingVertical: 18,
+  borderRadius: 12,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOpacity: 0.05,
+  shadowRadius: 6,
+  elevation: 2,
+},
+statLabel: {
+  fontSize: 14,
+  color: '#666',
+},
+statValue: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#111',
+  marginTop: 4,
+},
+addMealBtn: {
+  marginTop: 20,
+  backgroundColor: '#2f80ed',
+  paddingVertical: 14,
+  borderRadius: 12,
+  alignItems: 'center',
+},
+addMealText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '600',
+},
+mealsWrapper: {
+  marginTop: 40,
+},
+mealRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  padding: 14,
+  marginBottom: 12,
+  shadowColor: '#000',
+  shadowOpacity: 0.05,
+  shadowRadius: 4,
+  elevation: 1,
+},
+mealIcon: {
+  fontSize: 22,
+  marginRight: 10,
+},
+mealContent: {
+  flex: 1,
+},
+mealLabel: {
+  fontWeight: '600',
+  fontSize: 15,
+  color: '#111',
+},
+mealItems: {
+  fontSize: 13,
+  color: '#666',
+  marginTop: 2,
+},
+plusBtn: {
+  backgroundColor: '#2f80ed',
+  borderRadius: 20,
+  width: 28,
+  height: 28,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+plusText: {
+  color: '#fff',
+  fontSize: 18,
+  fontWeight: '700',
+},
+
 });

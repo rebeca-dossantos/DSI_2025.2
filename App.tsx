@@ -3,16 +3,22 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import {SafeAreaView,View,Text,TextInput,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform,Alert,} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 
 type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Home: { userEmail: string } | undefined;
+  Main: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const USERS_KEY = 'users';
+
+const Tab = createBottomTabNavigator();
+
 
 async function getUsers(): Promise<Record<string, string>> {
   try {
@@ -67,7 +73,7 @@ function LoginScreen({ navigation }: { navigation: any }) {
       return;
     }
 
-    navigation.replace('Home', { userEmail: email.trim() });
+    navigation.replace('Main', { userEmail: email.trim() });
   };
 
   return (
@@ -325,6 +331,43 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   </SafeAreaView>
   );
 }
+function MapScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text>Tela Mapa</Text>
+    </View>
+  );
+}
+
+function ProfileScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text>Tela Perfil</Text>
+    </View>
+  );
+}
+function Tabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: '#2f80ed',
+        tabBarInactiveTintColor: '#999',
+        tabBarStyle: { backgroundColor: '#fff', height: 60, paddingBottom: 6 },
+        tabBarIcon: ({ color, size }) => {
+          let icon = 'home';
+          if (route.name === 'Mapa') icon = 'map';
+          if (route.name === 'Perfil') icon = 'person';
+          return <Ionicons name={icon as any} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Mapa" component={MapScreen} />
+      <Tab.Screen name="Perfil" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
 
 export default function App(): JSX.Element {
   return (
@@ -333,6 +376,11 @@ export default function App(): JSX.Element {
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Criar Conta' }} />
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Início' }} />
+        <Stack.Screen
+          name="Main"
+          component={Tabs}
+          options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

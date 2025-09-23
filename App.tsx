@@ -1,7 +1,7 @@
 import React, { JSX, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import {SafeAreaView,View,Text,TextInput,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform,Alert,} from 'react-native';
+import {SafeAreaView,View,Text,TextInput,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform,Alert, Image} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -82,7 +82,12 @@ function LoginScreen({ navigation }: { navigation: any }) {
         style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Text style={styles.title}>Monitor de Queda de Cabelo</Text>
+        <Image
+      source={require('./assets/logo.png')} 
+      style={styles.logo}
+      resizeMode="contain"
+    />
+        <Text style={styles.title}>Registro nutricional</Text>
         <Text style={styles.subtitle}>Login para testar a navegação</Text>
 
 
@@ -208,40 +213,7 @@ function RegisterScreen({ navigation }: { navigation: any }) {
           <TouchableOpacity style={styles.button} onPress={handleRegister} accessibilityRole="button">
             <Text style={styles.buttonText}>Criar Conta</Text>
           </TouchableOpacity>
-  <View style={styles.mealsWrapper}>
-  <View style={styles.mealRow}>
-    <Text style={styles.mealIcon}>☕</Text>
-    <View style={styles.mealContent}>
-      <Text style={styles.mealLabel}>Café da manhã</Text>
-      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
-    </View>
-    <TouchableOpacity style={styles.plusBtn}>
-      <Text style={styles.plusText}>+</Text>
-    </TouchableOpacity>
-  </View>
-
-  <View style={styles.mealRow}>
-    <Text style={styles.mealIcon}>🍽️</Text>
-    <View style={styles.mealContent}>
-      <Text style={styles.mealLabel}>Almoço</Text>
-      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
-    </View>
-    <TouchableOpacity style={styles.plusBtn}>
-      <Text style={styles.plusText}>+</Text>
-    </TouchableOpacity>
-  </View>
-
-  <View style={styles.mealRow}>
-    <Text style={styles.mealIcon}>🌙</Text>
-    <View style={styles.mealContent}>
-      <Text style={styles.mealLabel}>Janta</Text>
-      <Text style={styles.mealItems}>Nenhum alimento ainda</Text>
-    </View>
-    <TouchableOpacity style={styles.plusBtn}>
-      <Text style={styles.plusText}>+</Text>
-    </TouchableOpacity>
-  </View>
-</View>
+  
 
 
           <TouchableOpacity
@@ -322,7 +294,7 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
 </View>
 
       <TouchableOpacity
-        style={[styles.button, { marginTop:'auto', marginBottom: 40 }]}
+        style={[styles.buttonSair, { marginTop:'auto', marginBottom: 40 }]}
         onPress={() => navigation.replace('Login')}
       >
         <Text style={styles.buttonText}>Sair</Text>
@@ -351,7 +323,7 @@ function Tabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#2f80ed',
+        tabBarActiveTintColor: '#58ad53',
         tabBarInactiveTintColor: '#999',
         tabBarStyle: { backgroundColor: '#fff', height: 60, paddingBottom: 6 },
         tabBarIcon: ({ color, size }) => {
@@ -389,28 +361,34 @@ export default function App(): JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f6f7fb',
+    backgroundColor: '#294c25',
   },
   inner: {
     flex: 1,
     padding: 20,
     justifyContent: 'center',
   },
+  logo: {
+  width: 120,
+  height: 120,
+  alignSelf: 'center',
+  marginBottom: 16,
+},
   title: {
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 6,
-    color: '#111',
+    color: '#f5f7f6',
   },
   subtitle: {
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#666',
+    color: '#f5f7f6',
   },
   form: {
-    backgroundColor: '#fff',
+    backgroundColor: '#58ad53',
     padding: 16,
     borderRadius: 12,
     shadowColor: '#000',
@@ -420,27 +398,34 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: '#333',
+    color: '#f5f7f6',
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e6e7ee',
+    borderColor: '#f5f7f6',
     padding: 12,
     borderRadius: 8,
     fontSize: 14,
     color: '#111',
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f7f6',
   },
   button: {
     marginTop: 18,
-    backgroundColor: '#2f80ed',
+    backgroundColor: '#294c25',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  buttonSair: {
+    marginTop: 18,
+    backgroundColor: '#58ad53',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
+    color: '#f5f7f6',
     fontWeight: '600',
     fontSize: 16,
   },
@@ -449,7 +434,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: '#2f80ed',
+    color: '#f5f7f6',
     fontSize: 13,
   },
   footer: {
@@ -466,7 +451,8 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
-    color: '#111',
+    color: '#f5f7f6',
+    marginTop: 30,
   },
   homeSubtitle: {
     textAlign: 'center',
@@ -526,7 +512,7 @@ statValue: {
 },
 addMealBtn: {
   marginTop: 20,
-  backgroundColor: '#2f80ed',
+  backgroundColor: '#58ad53',
   paddingVertical: 14,
   borderRadius: 12,
   alignItems: 'center',
@@ -569,7 +555,7 @@ mealItems: {
   marginTop: 2,
 },
 plusBtn: {
-  backgroundColor: '#2f80ed',
+  backgroundColor: '#58ad53',
   borderRadius: 20,
   width: 28,
   height: 28,

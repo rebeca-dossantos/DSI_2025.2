@@ -8,7 +8,7 @@
     ```
 2. Baixe as depedências:
     ```
-    npm install @react-navigation/native @react-navigation/native-stack @react-native-async-storage/async-storage
+    npm install @react-navigation/native @react-navigation/native-stack @react-native-async-storage/async-storage @react-navigation/bottom-tabs
     
     expo install react-native-screens react-native-safe-area-context
     ```

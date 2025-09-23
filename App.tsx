@@ -87,15 +87,15 @@ function LoginScreen({ navigation }: { navigation: any }) {
       style={styles.logo}
       resizeMode="contain"
     />
-        <Text style={styles.title}>Registro nutricional</Text>
-        <Text style={styles.subtitle}>Login para testar a navegação</Text>
+        <Text style={styles.title}>FitTrack</Text>
+        <Text style={styles.subtitle}>Login</Text>
 
 
         <View style={styles.form}>
           <Text style={styles.label}>Email</Text>
           <TextInput
             style={styles.input}
-            placeholder="seu@email.com"
+            placeholder="Insira seu email"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
@@ -126,7 +126,7 @@ function LoginScreen({ navigation }: { navigation: any }) {
             style={[styles.link, { marginTop: 10 }]}
             onPress={() => { navigation.navigate('Register'); }}
           >
-            <Text style={styles.linkText}>Criar conta</Text>
+            <Text style={styles.linkText}>Ainda não tem conta? Cadastre-se</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -185,14 +185,21 @@ function RegisterScreen({ navigation }: { navigation: any }) {
         style={styles.inner}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+
+        <Image
+      source={require('./assets/logo.png')} 
+      style={styles.logo}
+      resizeMode="contain"
+    />
+
         <Text style={styles.title}>Criar Conta</Text>
-        <Text style={styles.subtitle}>Cadastre um email e senha (apenas para testes)</Text>
+        <Text style={styles.subtitle}>Cadastre um email e senha</Text>
 
         <View style={styles.form}>
           <Text style={styles.label}>Email</Text>
           <TextInput
             style={styles.input}
-            placeholder="seu@email.com"
+            placeholder="Insira seu email"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}

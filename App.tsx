@@ -1,10 +1,13 @@
 import React, { JSX, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import {SafeAreaView,View,Text,TextInput,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform,Alert, Image} from 'react-native';
+import {SafeAreaView,View,Text,TextInput,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform, Image} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message'
+import { BaseToast, ErrorToast } from 'react-native-toast-message'
+import type { BaseToastProps } from 'react-native-toast-message'
 
 type RootStackParamList = {
   Login: undefined;
@@ -31,7 +34,7 @@ async function getUsers(): Promise<Record<string, string>> {
   }
 }
 
-async function saveUers(users: Record<string, string>): Promise<void> {
+async function saveUsers(users: Record<string, string>): Promise<void> {
   try {
     await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
   } catch (err) {
@@ -46,7 +49,12 @@ function LoginScreen({ navigation }: { navigation: any }) {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Erro', 'Preencha email e senha para continuar.');
+      Toast.show({
+            type: 'error', 
+            text1: 'Ops! Falta algo.', 
+            text2: 'Preencha seu email e sua senha para continuar.', 
+            visibilityTime: 4000, 
+        });
       return;
     }
 
@@ -54,22 +62,23 @@ function LoginScreen({ navigation }: { navigation: any }) {
     const stored = users[email.trim().toLowerCase()];
 
     if (!stored) {
-      Alert.alert(
-        'Conta não encontrada',
-        'Nenhuma conta encontrada para esse email. Deseja criar uma nova conta?',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Criar Conta',
-            onPress: () => navigation.navigate('Register'),
+      Toast.show({
+            type: 'error', 
+            text1: 'Não existe uma conta com esse email.',
+            text2: 'Cadastre-se para continuar.',
+            visibilityTime: 4000, 
           },
-        ]
       );
       return;
     }
 
     if (stored !== password) {
-      Alert.alert('Erro', 'Senha incorreta. Tente novamente.');
+      Toast.show({
+            type: 'error', 
+            text1: 'Erro', 
+            text2: 'Senha incorreta, tente novamente', 
+            visibilityTime: 4000, 
+        });
       return;
     }
 
@@ -154,28 +163,47 @@ function RegisterScreen({ navigation }: { navigation: any }) {
   const handleRegister = async () => {
     const e = email.trim().toLowerCase();
     if (!e || !password) {
-      Alert.alert('Erro', 'Preencha email e senha para continuar.');
+      Toast.show({
+            type: 'error', 
+            text1: 'Ops! Falta algo.', 
+            text2: 'Por favor, preencha seu email e sua senha para continuar.', 
+            visibilityTime: 4000, 
+        });
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(e)) {
-      Alert.alert('Erro', 'Email inválido.');
+      Toast.show({
+            type: 'error', 
+            text1: 'Email inválido.', 
+            visibilityTime: 4000, 
+        });
       return;
     }
 
     const users = await getUsers();
 
     if (users[e]) {
-      Alert.alert('Erro', 'Já existe uma conta com esse email. Faça login ou recupere a senha');
+      Toast.show({
+            type: 'error', 
+            text1: 'Já existe uma conta com esse email.', 
+            text2: 'Faça login ou recupere a senha.',
+            visibilityTime: 4000, 
+        });
       return;
     }
 
     users[e] = password;
-    await saveUers(users);
-    
-    Alert.alert('Conta criada', 'Sua conta foi criada com sucesso!');
-    
+    await saveUsers(users);
+
+    Toast.show({
+      type: 'success',
+      text1: 'Conta criada',
+      text2: 'Sua conta foi criada com sucesso!',
+      visibilityTime: 4000,
+    });
+
     navigation.replace('Home', { userEmail: e });
   };
 
@@ -347,9 +375,51 @@ function Tabs() {
     </Tab.Navigator>
   );
 }
-
+const toastConfig = {
+  // CONFIGURAÇÃO DE ERRO (VERMELHO)
+  error: (props: BaseToastProps) => (
+    <ErrorToast
+      {...props}
+      style={{ 
+        borderLeftColor: '#B30000', 
+        backgroundColor: '#B30000', 
+      }} 
+      contentContainerStyle={{ paddingHorizontal: 15 }} 
+      text1Style={{
+        fontSize: 15,
+        fontWeight: '900',
+        color: 'white', 
+      }}
+      text2Style={{
+        fontSize: 13,
+        color: 'white', 
+      }}
+    />
+  ),
+  
+  success: (props: BaseToastProps) => (
+    <BaseToast 
+      {...props}
+      style={{ 
+        borderLeftColor: '#38761D', 
+        backgroundColor: '#38761D', 
+      }}
+      contentContainerStyle={{ paddingHorizontal: 15 }}
+      text1Style={{
+        fontSize: 15,
+        fontWeight: '900',
+        color: 'white', 
+      }}
+      text2Style={{
+        fontSize: 13,
+        color: 'white', 
+      }}
+    />
+  ),
+};
 export default function App(): JSX.Element {
   return (
+    <>
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login">
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
@@ -362,6 +432,8 @@ export default function App(): JSX.Element {
         />
       </Stack.Navigator>
     </NavigationContainer>
+    <Toast config={toastConfig} /> 
+  </> 
   );
 }
 

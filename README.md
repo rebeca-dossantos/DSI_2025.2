@@ -6,7 +6,12 @@
     ```
     git clone https://github.com/rebeca-dossantos/DSI_2025.2.git
     ```
-2. Baixe as depedências:
+2. Baixe e instale o [Node.js](https://nodejs.org/pt).
+3. Instale o framework Expo, e baixe no celular o aplicativo Expo Go:
+    ```
+    npm install -g expo-cli
+    ```
+4. Baixe as depedências:
     ```
     npm install @react-navigation/native @react-navigation/native-stack @react-native-async-storage/async-storage @react-navigation/bottom-tabs
     
@@ -14,15 +19,15 @@
     
     expo install react-native-screens react-native-safe-area-context
     ```
-3. Atualize o expo:
+5. Atualize o expo:
     ```
     expo update
     ```
-4. Execute o aplicativo:
+6. Execute o aplicativo:
     ```
     npx expo start
     ```
-5. Caso ocorra um erro, tente desta outra forma:
+7. Caso ocorra um erro, tente desta outra forma:
     ```
     npx expo start --port 19001
     ```

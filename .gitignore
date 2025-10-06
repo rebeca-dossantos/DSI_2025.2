@@ -1,66 +1,40 @@
-# Arquivos e pastas do sistema
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# Pastas de dependências
-node_modules/
-venv/
-env/
-.env
-.venv
+# dependencies
 
-# Arquivos de log
-*.log
-
-# Arquivos de IDEs
-.vscode/
-.idea/
-*.sublime-workspace
-*.sublime-project
-
-# Arquivos de build
+# Expo
 dist/
-build/
-out/
+web-build/
+expo-env.d.ts
 
-# Arquivos temporários
-*.tmp
-*.temp
-~$*
-
-# Arquivos de backup
-*.bak
-*.swp
-*.swo
-
-# Arquivos de configuração locais
-.env.local
-.env.*.local
-
-# Regras específicas para React Native
-android/
-ios/
-*.keystore
+# Native
+.kotlin/
+*.orig.*
 *.jks
+*.p8
 *.p12
 *.key
-*.pem
 *.mobileprovision
-*.xcuserstate
-*.xcodeproj/
-*.xcworkspace/
-*.gradle
-*.iml
-*.apk
-*.aab
-*.app
-*.ipa
-metro-cache/
-coverage/
-fastlane/report.xml
-fastlane/test_output/
-fastlane/screenshots/
-fastlane/preview.html
 
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+node_modules

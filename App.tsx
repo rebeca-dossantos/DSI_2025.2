@@ -1,7 +1,7 @@
 import React, { JSX, useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import {SafeAreaView,View,Text,TextInput,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform,Image,FlatList,Pressable,Alert} from 'react-native';
+import {SafeAreaView,View,Text,TextInput,Linking,TouchableOpacity,StyleSheet,KeyboardAvoidingView,Platform,Image,FlatList,Pressable,Alert, ScrollView, Modal} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -653,14 +653,191 @@ function MapScreen() {
     </View>
   );
 }
-
 function ProfileScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Tela Perfil</Text>
+  const [userEmail, setUserEmail] = useState('');
+  const [userStats, setUserStats] = useState({
+    dias: 12,
+    carboidrato: 170,
+    peso: 70,
+    altura: 170,
+    calorias: 1800,
+    proteina: 120,
+  });
+
+  // 🔥 AQUI ficam as metas:
+  const [goals, setGoals] = useState({
+    calorias: 1800,
+    proteina: 120,
+    carboidratos: 220,
+    gordura: 60,
+  });
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<null | string>(null);
+  const [newValue, setNewValue] = useState('');
+
+  const handleEditStats = (key: string) => {
+  setSelectedGoal(key);
+  setNewValue(String((userStats as any)[key]));
+  setModalVisible(true);
+};
+
+const handleEditGoals = (key: string) => {
+  setSelectedGoal(key);
+  setNewValue(String((goals as any)[key]));
+  setModalVisible(true);
+};
+
+
+  const saveGoal = () => {
+    if (selectedGoal && !isNaN(Number(newValue))) {
+      setGoals({ ...goals, [selectedGoal]: Number(newValue) });
+    }
+    setModalVisible(false);
+    setSelectedGoal(null);
+  };
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedEmail = await AsyncStorage.getItem('lastLoggedUser');
+        if (storedEmail) setUserEmail(storedEmail);
+      } catch (err) {
+        console.warn('Erro ao carregar email:', err);
+      }
+    };
+    loadUser();
+  }, []);
+
+return (
+   <ScrollView style={[styles.container, { backgroundColor: '#f5f7f6' }]} contentContainerStyle={{ paddingBottom: 20 }}>
+
+    {/* Header */}
+    <View style={styles.header}>
+      <View style={styles.avatarContainer}>
+        <Image
+          source={{
+            uri: 'https://ui-avatars.com/api/?name=User&background=007AFF&color=fff&size=128',
+          }}
+          style={styles.avatar}
+        />
+      </View>
+
+      <View style={styles.infoContainer}>
+        <Text style={styles.name}>Usuário de Teste</Text>
+        <Text style={styles.email}>{userEmail || 'User@gmail.com'}</Text>
+      </View>
     </View>
-  );
+
+    {/* Estatísticas */}
+    <View style={styles.statsContainer}>
+      <View style={styles.statCard}>
+        <Text style={styles.statsLabel}>Dias consecutivos</Text>
+        <Text style={styles.statsValue}>{userStats.dias}</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statsLabel}>Média carb/dia</Text>
+        <Text style={styles.statsValue}>{userStats.carboidrato}</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statsLabel}>Média proteínas/dia</Text>
+        <Text style={styles.statsValue}>{userStats.proteina}</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statsLabel}>Media kcal/dia</Text>
+        <Text style={styles.statsValue}>{userStats.calorias}</Text>
+      </View>
+    </View>
+ {/* Card Dados Pessoais */}
+      <View style={styles.goalsCard}>
+        <Text style={styles.goalsTitle}>Dados Pessoais</Text>
+
+        <View style={styles.goalRow}>
+          <Text style={styles.goalLabel}>Altura</Text>
+          <View style={styles.goalValueBox}>
+            <Text style={styles.goalValue}>{userStats.altura} cm</Text>
+            <TouchableOpacity onPress={() => handleEditStats('altura')}>
+              <Ionicons name="create-outline" size={24} color="#58ad53" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.goalRow}>
+          <Text style={styles.goalLabel}>Peso</Text>
+          <View style={styles.goalValueBox}>
+            <Text style={styles.goalValue}>{userStats.peso} Kg</Text>
+            <TouchableOpacity onPress={() => handleEditStats('peso')}>
+              <Ionicons name="create-outline" size={24} color="#58ad53" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Card de Metas */}
+<View style={styles.goalsCard}>
+  <Text style={styles.goalsTitle}>Metas Diárias</Text>
+
+  {Object.entries(goals).map(([key, value]) => (
+    <View key={key} style={styles.goalRow}>
+      <Text style={styles.goalLabel}>
+        {key.charAt(0).toUpperCase() + key.slice(1)}
+      </Text>
+      <View style={styles.goalValueBox}>
+        <Text style={styles.goalValue}>
+          {value}
+          {key === 'calorias' ? ' kcal' : ' g'}
+        </Text>
+        <TouchableOpacity onPress={() => handleEditGoals(key)}>
+          <Ionicons name="create-outline" size={24} color="#2f80ed" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  ))}
+
+  {/* 🔥 Modal de Edição */}
+  <Modal
+    transparent
+    animationType="fade"
+    visible={modalVisible}
+    onRequestClose={() => setModalVisible(false)}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>
+          Editar {selectedGoal && selectedGoal.charAt(0).toUpperCase() + selectedGoal.slice(1)}
+        </Text>
+
+        <TextInput
+          style={styles.input}
+          keyboardType="numeric"
+          value={newValue}
+          onChangeText={setNewValue}
+        />
+
+        <View style={styles.modalButtons}>
+          <Pressable style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+            <Text style={styles.buttonText}>Cancelar</Text>
+          </Pressable>
+          <Pressable style={styles.saveButton} onPress={saveGoal}>
+            <Text style={styles.buttonText}>Salvar</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  </Modal>
+  
+</View>
+<TouchableOpacity
+  style={styles.emergencyButton}
+  onPress={() => Linking.openURL('tel:190')} // ou o número de emergência local
+>
+  <Text style={styles.emergencyButtonText}>Ligar para Emergência</Text>
+</TouchableOpacity>
+  </ScrollView>
+);
 }
+
+
 function Tabs() {
   return (
     <Tab.Navigator
@@ -1047,4 +1224,156 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+    header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    backgroundColor: '#fff',
+  },
+  avatarContainer: {
+    marginRight: 16,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#e0e0e0',
+  },
+  infoContainer: {
+    flex: 1,
+  },
+  name: {
+    fontSize: 25,
+    fontWeight: '600',
+    color: '#222',
+  },
+  email: {
+    fontSize: 15,
+    color: '#666',
+    marginTop: 4,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  statCard: {
+    width: '47%',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statsLabel: {
+    fontSize: 15,
+    color: '#666',
+    marginBottom: 4,
+  },
+  statsValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#222',
+  },
+  goalsCard: {
+  backgroundColor: '#fff',
+  marginHorizontal: 20,
+  marginTop: 20,
+ height: 'auto',
+  borderRadius: 16,
+  paddingVertical: 20,
+  paddingHorizontal: 16,
+  shadowColor: '#000',
+  shadowOpacity: 0.08,
+  shadowRadius: 6,
+  elevation: 3,
+},
+goalsTitle: {
+  fontSize: 20,
+  fontWeight: '700',
+  color: '#222',
+  marginBottom: 12,
+},
+goalRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  paddingVertical: 20,
+  borderBottomWidth: 1,
+  borderBottomColor: '#eee',
+},
+goalLabel: {
+  fontSize: 18,
+  color: '#444',
+},
+goalValueBox: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+},
+goalValue: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#111',
+},
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.4)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+modalContent: {
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  padding: 20,
+  width: '80%',
+  shadowColor: '#000',
+  shadowOpacity: 0.2,
+  shadowRadius: 6,
+  elevation: 5,
+},
+modalTitle: {
+  fontSize: 18,
+  fontWeight: '600',
+  marginBottom: 12,
+  textAlign: 'center',
+},
+modalButtons: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 16,
+},
+cancelButton: {
+  backgroundColor: '#ccc',
+  borderRadius: 8,
+  paddingVertical: 10,
+  paddingHorizontal: 16,
+},
+saveButton: {
+  backgroundColor: '#58ad53',
+  borderRadius: 8,
+  paddingVertical: 10,
+  paddingHorizontal: 16,
+},
+emergencyButton: {
+  backgroundColor: '#e74c3c',
+  paddingVertical: 16,
+  marginHorizontal: 16,
+  borderRadius: 12,
+  marginTop: 20,
+  alignItems: 'center',
+},
+emergencyButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: 'bold',
+},
 });

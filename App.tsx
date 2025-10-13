@@ -405,7 +405,7 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
       {/* BOTÃO TEMPORÁRIO DE RESET - REMOVA ESTE BLOCO QUANDO NÃO PRECISAR MAIS */}
       {/* Ao remover, delete apenas este TouchableOpacity; não é necessário alterar nada no resto do código */}
       <TouchableOpacity
-        style={[styles.button, { marginTop: 12, backgroundColor: '#e74c3c' }]}
+        style={[styles.button, { marginTop: 12, backgroundColor: '#16a34a' }]}
         onPress={handleResetMeals}
       >
         <Text style={styles.buttonText}>Resetar alimentos (teste)</Text>
@@ -1291,7 +1291,7 @@ const styles = StyleSheet.create({
   bottomLabel: { fontSize: 12, color: "#9ca3af", marginTop: 2 },
   container: {
     flex: 1,
-    backgroundColor: '#294c25',
+    backgroundColor: '#f5f7f6',
   },
   inner: {
     flex: 1,
@@ -1309,16 +1309,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 6,
-    color: '#f5f7f6',
+    color: '#000',
   },
   subtitle: {
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 20,
-    color: '#f5f7f6',
+    color: '#000',
   },
   form: {
-    backgroundColor: '#58ad53',
+    backgroundColor: '#f9f9f9',
     padding: 16,
     borderRadius: 12,
     shadowColor: '#000',
@@ -1328,12 +1328,12 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: '#f5f7f6',
+    color: '#000',
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#f5f7f6',
+    borderColor: '#166534',
     padding: 12,
     borderRadius: 8,
     fontSize: 14,
@@ -1342,20 +1342,20 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 18,
-    backgroundColor: '#294c25',
+    backgroundColor: '#86efac',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   buttonSair: {
     marginTop: 18,
-    backgroundColor: '#58ad53',
+    backgroundColor: '#86efac',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   buttonText: {
-    color: '#f5f7f6',
+    color: '#166534',
     fontWeight: '600',
     fontSize: 16,
   },
@@ -1364,7 +1364,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: '#f5f7f6',
+    color: '#000',
     fontSize: 13,
   },
   footer: {
@@ -1442,13 +1442,13 @@ const styles = StyleSheet.create({
   },
   addMealBtn: {
     marginTop: 20,
-    backgroundColor: '#58ad53',
+    backgroundColor: '#86efac',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
   addMealText: {
-    color: '#fff',
+    color: '#166534',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1485,7 +1485,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   plusBtn: {
-    backgroundColor: '#58ad53',
+    backgroundColor: '#16a34a',
     borderRadius: 20,
     width: 28,
     height: 28,

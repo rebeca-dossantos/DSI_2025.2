@@ -16,8 +16,11 @@
     npm install @react-navigation/native @react-navigation/native-stack @react-native-async-storage/async-storage @react-navigation/bottom-tabs
     
     npm install react-native-toast-message
+
+    npm install expo-navigation-bar
     
     expo install react-native-screens react-native-safe-area-context
+    
     ```
 5. Atualize o expo:
     ```

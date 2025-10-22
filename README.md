@@ -15,6 +15,8 @@
     ```
     npm install @react-navigation/native @react-navigation/native-stack @react-native-async-storage/async-storage @react-navigation/bottom-tabs
     
+    npm install @react-navigation/material-top-tabs react-native-tab-view
+
     npm install react-native-toast-message
 
     npm install expo-navigation-bar

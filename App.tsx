@@ -7,10 +7,6 @@ import Toast from 'react-native-toast-message';
 import { BaseToast, ErrorToast } from 'react-native-toast-message';
 import type { BaseToastProps } from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-
-
-// NOTE: Home fica em arquivo separado (./Home.tsx); App só cuida de Login / Register
 import Home from './Home';
 
 type RootStackParamList = {
@@ -21,7 +17,6 @@ type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/* ---------- Helpers de usuário (AsyncStorage) ---------- */
 async function getUsers(): Promise<Record<string, string>> {
   try {
     const raw = await AsyncStorage.getItem('users');
@@ -40,11 +35,6 @@ async function saveUsers(users: Record<string, string>): Promise<void> {
     console.warn('Erro salvando usuários', err);
   }
 }
-
-/* ---------------------------
-   LoginScreen + RegisterScreen
-   (apenas lógica e navegação para Home)
-   --------------------------- */
 
 function LoginScreen({ navigation }: { navigation: any }) {
   const [email, setEmail] = useState<string>('');
@@ -65,8 +55,6 @@ function LoginScreen({ navigation }: { navigation: any }) {
       Toast.show({ type: 'error', text1: 'Erro', text2: 'Senha incorreta, tente novamente', visibilityTime: 4000 });
       return;
     }
-
-    // navegamos PARA Home (arquivo separado)
     navigation.replace('Home', { userEmail: email.trim() });
   };
 
@@ -143,7 +131,6 @@ function RegisterScreen({ navigation }: { navigation: any }) {
 
     Toast.show({ type: 'success', text1: 'Conta criada', text2: 'Sua conta foi criada com sucesso!', visibilityTime: 4000 });
 
-    // também navegamos para Home após registro
     navigation.replace('Home', { userEmail: e });
   };
 
@@ -190,7 +177,6 @@ function RegisterScreen({ navigation }: { navigation: any }) {
   );
 }
 
-/* Toast config */
 const toastConfig = {
   error: (props: BaseToastProps) => (
     <ErrorToast
@@ -227,7 +213,6 @@ export default function App(): JSX.Element {
   );
 }
 
-/* ---------- styles (mantive as classes usadas aqui) ---------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f7f6' },
   inner: { flex: 1, padding: 20, justifyContent: 'center' },
@@ -243,7 +228,6 @@ const styles = StyleSheet.create({
   linkText: { color: '#000', fontSize: 13 },
   footer: { textAlign: 'center', marginTop: 18, color: '#999', fontSize: 12 },
 
-  // styles extras que podem ser úteis quando você mover AddFood para outro arquivo
   searchInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, marginTop: 8, backgroundColor: '#f7f7f7' },
   foodRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 10, elevation: 1 },
   foodName: { fontWeight: '700' },

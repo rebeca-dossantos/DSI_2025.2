@@ -3,17 +3,12 @@ import React, { JSX, useEffect, useState } from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, Alert, ScrollView, FlatList, Pressable, TextInput, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-
-// Navigation imports
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-
-// importe suas telas de Map e Profile (assumindo que existem ./Map e ./Profile)
 import MapScreen from './Map';
 import ProfileScreen from './Profile';
 
-/* ---- TIPOS ---- */
 export type SavedMealItem = { id: number; name: string; qty: number; };
 
 export type FoodItem = {
@@ -26,7 +21,6 @@ export type FoodItem = {
   glycemic?: string;
 };
 
-/* ---- DADOS SAMPLE (exportados para AddFood) ---- */
 export const SAMPLE_FOODS: FoodItem[] = [
   {id: 1, name: 'Aveia integral', description: 'Cereais • 30g', carbs: 20, cal: 117, protein: 4, glycemic: 'IG Baixo'},
   {id: 2, name: 'Peito de frango grelhado', description: 'Carnes • 100g', carbs: 0, cal: 165, protein: 31, glycemic: 'IG Muito baixo'},
@@ -80,7 +74,6 @@ export async function saveMealsForToday(data: Record<string, SavedMealItem[]>) {
   }
 }
 
-/* ---- CORES IG (exportadas) ---- */
 export const GLYCEMIC_COLORS: Record<string, string> = {
   'IG Muito baixo': '#2ecc71',
   'IG Baixo': '#3498db',
@@ -96,7 +89,6 @@ export function getGlycemicTextColor(level?: string) {
   return '#fff';
 }
 
-/* ---- Componente GlycemicBadge (exportado) ---- */
 export function GlycemicBadge({ level }: { level?: string }) {
   if (!level) return null;
   const bg = getGlycemicColor(level);
@@ -108,9 +100,6 @@ export function GlycemicBadge({ level }: { level?: string }) {
   );
 }
 
-/* ------------------------------------------------------
-   Tela principal (renomeada para HomeScreen)
-   ------------------------------------------------------ */
 function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   const userEmail = route?.params?.userEmail ?? 'Usuário';
 
@@ -263,9 +252,6 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   );
 }
 
-/* ---- AddFoodScreen (dentro do mesmo arquivo) ----
-   O badge IG será mostrado aqui, ao lado do nome do alimento.
-*/
 export function AddFoodScreen({ navigation, route }: { navigation: any; route: any }) {
   const meal = route?.params?.meal ?? 'Refeição';
   const [selected, setSelected] = useState<Record<number, number>>({});
@@ -310,7 +296,6 @@ export function AddFoodScreen({ navigation, route }: { navigation: any; route: a
         <View style={{ flex: 1 }}>
           <View style={localStyles.nameRow}>
             <Text style={localStyles.foodName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
-            {/* AQUI: badge IG aparece apenas nesta tela */}
             <GlycemicBadge level={item.glycemic} />
           </View>
 
@@ -361,7 +346,6 @@ export function AddFoodScreen({ navigation, route }: { navigation: any; route: a
   );
 }
 
-/* ---- estilos locais usados pelo AddFood ---- */
 const localStyles = StyleSheet.create({
   searchInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, marginTop: 8, backgroundColor: '#f7f7f7' },
   foodRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 10, elevation: 1 },
@@ -379,11 +363,6 @@ const localStyles = StyleSheet.create({
   addBarBtn: { backgroundColor: '#0b8f3f', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
 });
 
-/* ------------------------------------------------------
-   Navegadores: HomeStack (Stack) + Tabs (Bottom)
-   export default: Tabs (com HomeStack, Map e Profile)
-   ------------------------------------------------------ */
-
 const Stack = createNativeStackNavigator();
 
 function HomeStack() {
@@ -395,13 +374,12 @@ function HomeStack() {
         options={{ headerShown: false }}
       />
 
-      {/* A tela de adicionar alimentos agora mostra o header automaticamente */}
       <Stack.Screen
         name="AddFood"
         component={AddFoodScreen}
         options={{
           title: 'Adicionar alimentos',
-          headerTintColor: '#000', // cor do ícone de voltar
+          headerTintColor: '#000',
           headerStyle: { backgroundColor: '#fff' },
         }}
       />

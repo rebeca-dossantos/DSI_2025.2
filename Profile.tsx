@@ -3,17 +3,23 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, View, Text, Image, TouchableOpacity, Modal, TextInput, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const [userEmail, setUserEmail] = useState('');
+  // Nome do usuário agora editável
+  const [userName, setUserName] = useState('Usuário de Teste');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
   const [userStats, setUserStats] = useState({
-    dias: 12,
-    carboidrato: 170,
-    peso: 70,
-    altura: 170,
-    calorias: 1800,
-    proteina: 120,
-  });
+  dias: 0,
+  carboidrato: 0,
+  peso: 0,
+  altura: 0,
+  calorias: 0,
+  proteina: 0,
+});
+
 
   // 🔥 Metas diárias do usuário
   const [goals, setGoals] = useState({
@@ -39,9 +45,47 @@ export default function ProfileScreen() {
     setModalVisible(true);
   };
 
+  // abrir edição do nome
+  const handleEditName = () => {
+    setSelectedGoal('name');
+    setNewValue(userName);
+    setModalVisible(true);
+  };
+
+  const handlePickImage = async () => {
+  // pede permissão de acesso à galeria
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    alert('Precisamos da sua permissão para acessar suas fotos.');
+    return;
+  }
+
+  // abre a galeria
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.8,
+  });
+
+  // se o usuário escolheu uma imagem, salva o URI dela
+  if (!result.canceled && result.assets && result.assets.length > 0) {
+    const uri = result.assets[0].uri;
+    setProfileImage(uri);
+    await AsyncStorage.setItem('userProfileImage', uri); // salva localmente
+  }
+};
+
   const saveGoal = () => {
-    if (selectedGoal && !isNaN(Number(newValue))) {
-      if (userStats.hasOwnProperty(selectedGoal)) {
+    if (!selectedGoal) {
+      setModalVisible(false);
+      return;
+    }
+
+    if (selectedGoal === 'name') {
+      setUserName(newValue.trim() || 'Usuário de Teste');
+    } else if (!isNaN(Number(newValue))) {
+      if ((userStats as any).hasOwnProperty(selectedGoal)) {
         setUserStats({ ...userStats, [selectedGoal]: Number(newValue) });
       } else {
         setGoals({ ...goals, [selectedGoal]: Number(newValue) });
@@ -57,8 +101,43 @@ export default function ProfileScreen() {
       try {
         const storedEmail = await AsyncStorage.getItem('lastLoggedUser');
         if (storedEmail) setUserEmail(storedEmail);
+        // opcional: carregar nome salvo (se você quiser persistir)
+        const storedName = await AsyncStorage.getItem('lastLoggedUserName');
+        if (storedName) setUserName(storedName);
+        const storedImage = await AsyncStorage.getItem('userProfileImage');
+        if (storedImage) setProfileImage(storedImage);
+        const storedStats = await AsyncStorage.getItem('userStats');
+        if (storedStats) {
+          const parsedStats = JSON.parse(storedStats);
+          setUserStats(prev => ({
+            ...prev,
+            ...parsedStats,
+          }));
+        }
+
+        const updateDaysUsed = async () => {
+          try {
+            const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+            const lastDate = await AsyncStorage.getItem('lastOpenDate');
+            let days = Number(await AsyncStorage.getItem('daysUsed')) || 0;
+
+            if (lastDate !== today) {
+              // Novo dia
+              days += 1;
+              await AsyncStorage.setItem('lastOpenDate', today);
+              await AsyncStorage.setItem('daysUsed', String(days));
+            }
+
+            // Atualiza o estado do usuário para refletir os dias
+            setUserStats(prev => ({ ...prev, dias: days }));
+          } catch (err) {
+            console.warn('Erro ao atualizar dias:', err);
+          }
+        };
+
+        await updateDaysUsed();
       } catch (err) {
-        console.warn('Erro ao carregar email:', err);
+        console.warn('Erro ao carregar usuário:', err);
       }
     };
     loadUser();
@@ -80,20 +159,33 @@ export default function ProfileScreen() {
         }}
       >
         <View style={{ marginRight: 16 }}>
-          <Image
-            source={{
-              uri: 'https://ui-avatars.com/api/?name=User&background=007AFF&color=fff&size=128',
-            }}
-            style={{ width: 72, height: 72, borderRadius: 36 }}
-          />
+          <TouchableOpacity onPress={handlePickImage}>
+  <TouchableOpacity onPress={handlePickImage}></TouchableOpacity>
+  <Image
+    source={{
+      uri: profileImage
+        ? profileImage
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=007AFF&color=fff&size=128`,
+    }}
+    style={{ width: 72, height: 72, borderRadius: 36 }}
+  />
+  <Ionicons
+    name="camera-outline"
+    size={20}
+    color="#2f80ed"
+    style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#fff', borderRadius: 10, padding: 2 }}
+  />
+</TouchableOpacity>
+
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 25, fontWeight: '600', color: '#222' }}>
-            Usuário de Teste
-          </Text>
-          <Text style={{ fontSize: 15, color: '#666', marginTop: 4 }}>
-            {userEmail || 'user@gmail.com'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 25, fontWeight: '600', color: '#222' }}>{userName}</Text>
+            <TouchableOpacity onPress={handleEditName} style={{ marginLeft: 8 }}>
+              <Ionicons name="create-outline" size={22} color="#2f80ed" />
+            </TouchableOpacity>
+          </View>
+          <Text style={{ fontSize: 15, color: '#666', marginTop: 4 }}>{userEmail}</Text>
         </View>
       </View>
 
@@ -271,6 +363,7 @@ export default function ProfileScreen() {
               width: '80%',
             }}
           >
+            {/* título do modal: tratar nome separado para português */}
             <Text
               style={{
                 fontSize: 18,
@@ -280,8 +373,11 @@ export default function ProfileScreen() {
               }}
             >
               Editar{' '}
-              {selectedGoal &&
-                selectedGoal.charAt(0).toUpperCase() + selectedGoal.slice(1)}
+              {selectedGoal
+                ? selectedGoal === 'name'
+                  ? 'Nome'
+                  : selectedGoal.charAt(0).toUpperCase() + selectedGoal.slice(1)
+                : ''}
             </Text>
 
             <TextInput
@@ -291,7 +387,8 @@ export default function ProfileScreen() {
                 padding: 12,
                 borderRadius: 8,
               }}
-              keyboardType="numeric"
+              keyboardType={selectedGoal === 'name' ? 'default' : 'numeric'}
+              autoCapitalize={selectedGoal === 'name' ? 'words' : 'none'}
               value={newValue}
               onChangeText={setNewValue}
             />

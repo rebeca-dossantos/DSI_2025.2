@@ -109,31 +109,58 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   const [totalCalories, setTotalCalories] = useState<number>(0);
 
   useEffect(() => {
-    const computeTotals = (mealsSaved: Record<string, SavedMealItem[]>) => {
-      let p = 0; let c = 0; let cal = 0;
-      Object.values(mealsSaved).forEach(items => items.forEach(it => {
-        const food = SAMPLE_FOODS.find(f => f.id === it.id);
-        if (!food) return;
-        const qty = it.qty ?? 1;
-        p += (food.protein ?? 0) * qty;
-        c += (food.carbs ?? 0) * qty;
-        cal += (food.cal ?? 0) * qty;
-      }));
-      setTotalProtein(Math.round(p * 10) / 10);
-      setTotalCarbs(Math.round(c * 10) / 10);
-      setTotalCalories(Math.round(cal));
+  const computeTotals = async (mealsSaved: Record<string, SavedMealItem[]>) => {
+    let p = 0; 
+    let c = 0; 
+    let cal = 0;
+
+    Object.values(mealsSaved).forEach(items => items.forEach(it => {
+      const food = SAMPLE_FOODS.find(f => f.id === it.id);
+      if (!food) return;
+      const qty = it.qty ?? 1;
+      p += (food.protein ?? 0) * qty;
+      c += (food.carbs ?? 0) * qty;
+      cal += (food.cal ?? 0) * qty;
+    }));
+
+    const totalP = Math.round(p * 10) / 10;
+    const totalC = Math.round(c * 10) / 10;
+    const totalCal = Math.round(cal);
+
+    // atualiza os estados
+    setTotalProtein(totalP);
+    setTotalCarbs(totalC);
+    setTotalCalories(totalCal);
+
+    // 🔹 salva no AsyncStorage para o perfil
+    const stats = {
+      proteina: totalP,
+      carboidrato: totalC,
+      calorias: totalCal,
+      dias: 12, // temporário — depois automatizamos
+      peso: 70,
+      altura: 170,
     };
 
-    const loadAndCompute = async () => {
-      const data = await loadMealsForToday();
-      setMeals(data);
-      computeTotals(data);
-    };
+    try {
+      await AsyncStorage.setItem('userStats', JSON.stringify(stats));
+      console.log('✅ Estatísticas atualizadas no AsyncStorage:', stats);
+    } catch (err) {
+      console.warn('Erro salvando userStats:', err);
+    }
+  };
 
-    const unsub = navigation.addListener('focus', loadAndCompute);
-    loadAndCompute();
-    return unsub;
-  }, [navigation]);
+  const loadAndCompute = async () => {
+    const data = await loadMealsForToday();
+    setMeals(data);
+    await computeTotals(data);
+  };
+
+  const unsub = navigation.addListener('focus', loadAndCompute);
+  loadAndCompute();
+  return unsub;
+}, [navigation]);
+
 
   function joinAndTruncate(names: string[], maxChars = 36) {
     const joined = names.join(' • ');
@@ -171,6 +198,15 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
               setTotalProtein(0);
               setTotalCarbs(0);
               setTotalCalories(0);
+              const stats = {
+                proteina: totalProtein,
+                carboidrato: totalCarbs,
+                calorias: totalCalories,
+                dias: 12, // temporário — depois podemos calcular com base no histórico
+                peso: 70,
+                altura: 170,
+              };
+            await AsyncStorage.setItem('userStats', JSON.stringify(stats));
               Toast.show({ type: 'success', text1: 'Reset realizado', text2: 'As refeições de hoje foram removidas.', visibilityTime: 2500 });
             } catch (err) {
               console.warn('Erro ao resetar refeições', err);

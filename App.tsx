@@ -55,6 +55,7 @@ function LoginScreen({ navigation }: { navigation: any }) {
       Toast.show({ type: 'error', text1: 'Erro', text2: 'Senha incorreta, tente novamente', visibilityTime: 4000 });
       return;
     }
+    await AsyncStorage.setItem('lastLoggedUser', email.trim());
     navigation.replace('Home', { userEmail: email.trim() });
   };
 
@@ -128,7 +129,7 @@ function RegisterScreen({ navigation }: { navigation: any }) {
     }
     users[e] = password;
     await saveUsers(users);
-
+    await AsyncStorage.setItem('lastLoggedUser', e);
     Toast.show({ type: 'success', text1: 'Conta criada', text2: 'Sua conta foi criada com sucesso!', visibilityTime: 4000 });
 
     navigation.replace('Home', { userEmail: e });

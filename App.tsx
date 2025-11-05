@@ -8,6 +8,7 @@ import { BaseToast, ErrorToast } from 'react-native-toast-message';
 import type { BaseToastProps } from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Home from './Home';
+import { supabase } from './supabase';
 
 type RootStackParamList = {
   Login: undefined;
@@ -16,25 +17,6 @@ type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-async function getUsers(): Promise<Record<string, string>> {
-  try {
-    const raw = await AsyncStorage.getItem('users');
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, string>;
-  } catch (err) {
-    console.warn('Erro lendo usuários', err);
-    return {};
-  }
-}
-
-async function saveUsers(users: Record<string, string>): Promise<void> {
-  try {
-    await AsyncStorage.setItem('users', JSON.stringify(users));
-  } catch (err) {
-    console.warn('Erro salvando usuários', err);
-  }
-}
 
 function LoginScreen({ navigation }: { navigation: any }) {
   const [email, setEmail] = useState<string>('');
@@ -45,18 +27,25 @@ function LoginScreen({ navigation }: { navigation: any }) {
       Toast.show({ type: 'error', text1: 'Ops! Falta algo.', text2: 'Preencha seu email e sua senha para continuar.', visibilityTime: 4000 });
       return;
     }
-    const users = await getUsers();
-    const stored = users[email.trim().toLowerCase()];
-    if (!stored) {
-      Toast.show({ type: 'error', text1: 'Não existe uma conta com esse email.', text2: 'Cadastre-se para continuar.', visibilityTime: 4000 });
-      return;
+
+    try {
+      const res = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (res.error) {
+        Toast.show({ type: 'error', text1: 'Erro no login', text2: res.error.message || 'Não foi possível autenticar.', visibilityTime: 4000 });
+        return;
+      }
+
+      await AsyncStorage.setItem('lastLoggedUser', email.trim().toLowerCase());
+      Toast.show({ type: 'success', text1: 'Bem-vindo', text2: 'Login realizado com sucesso!', visibilityTime: 2000 });
+      navigation.replace('Home', { userEmail: email.trim().toLowerCase() });
+    } catch (err: any) {
+      console.warn('Login error', err);
+      Toast.show({ type: 'error', text1: 'Erro', text2: 'Erro inesperado ao tentar logar.', visibilityTime: 4000 });
     }
-    if (stored !== password) {
-      Toast.show({ type: 'error', text1: 'Erro', text2: 'Senha incorreta, tente novamente', visibilityTime: 4000 });
-      return;
-    }
-    await AsyncStorage.setItem('lastLoggedUser', email.trim());
-    navigation.replace('Home', { userEmail: email.trim() });
   };
 
   return (
@@ -122,17 +111,28 @@ function RegisterScreen({ navigation }: { navigation: any }) {
       Toast.show({ type: 'error', text1: 'Email inválido.', visibilityTime: 4000 });
       return;
     }
-    const users = await getUsers();
-    if (users[e]) {
-      Toast.show({ type: 'error', text1: 'Já existe uma conta com esse email.', text2: 'Faça login ou recupere a senha.', visibilityTime: 4000 });
-      return;
-    }
-    users[e] = password;
-    await saveUsers(users);
-    await AsyncStorage.setItem('lastLoggedUser', e);
-    Toast.show({ type: 'success', text1: 'Conta criada', text2: 'Sua conta foi criada com sucesso!', visibilityTime: 4000 });
 
-    navigation.replace('Home', { userEmail: e });
+    try {
+      // criar usuário no Supabase (client-side)
+      const res = await supabase.auth.signUp({
+        email: e,
+        password,
+        options: { data: { created_at: new Date().toISOString() } }
+      });
+
+      if (res.error) {
+        Toast.show({ type: 'error', text1: 'Erro', text2: res.error.message || 'Não foi possível criar a conta.', visibilityTime: 4000 });
+        return;
+      }
+
+      // Não mostramos/obrigamos confirmação de email — apenas confirmamos criação e voltamos ao login
+      await AsyncStorage.setItem('lastLoggedUser', e);
+      Toast.show({ type: 'success', text1: 'Conta criada', text2: 'Sua conta foi criada com sucesso! Faça login para continuar.', visibilityTime: 3500 });
+      navigation.replace('Login');
+    } catch (err: any) {
+      console.warn('Register error', err);
+      Toast.show({ type: 'error', text1: 'Erro', text2: 'Erro inesperado ao criar conta.', visibilityTime: 4000 });
+    }
   };
 
   return (
@@ -229,6 +229,7 @@ const styles = StyleSheet.create({
   linkText: { color: '#000', fontSize: 13 },
   footer: { textAlign: 'center', marginTop: 18, color: '#999', fontSize: 12 },
 
+  // mantive estilos adicionais usados em Home/AddFood
   searchInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, marginTop: 8, backgroundColor: '#f7f7f7' },
   foodRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 10, elevation: 1 },
   foodName: { fontWeight: '700' },

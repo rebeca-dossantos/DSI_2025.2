@@ -21,6 +21,8 @@
 
     npm install expo-navigation-bar
     
+    npx expo install @supabase/supabase-js @rneui/themed react-native-url-polyfill
+
     expo install react-native-screens react-native-safe-area-context
     
     ```

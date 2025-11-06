@@ -50,23 +50,106 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
     setModalVisible(true);
   };
 
-  const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      alert('Precisamos da sua permissão para acessar suas fotos.');
-      return;
+  function getFileExtFromName(name: string) {
+    const m = name.match(/\.([a-zA-Z0-9]+)(\?.*)?$/);
+    if (!m) return 'jpg';
+    const e = m[1].toLowerCase();
+    return e === 'jpeg' ? 'jpg' : e;
+  }
+
+  function getFileNameFromUri(uri: string) {
+    try {
+      const parts = uri.split('/');
+      let last = parts[parts.length - 1] || parts[parts.length - 2] || 'image.jpg';
+      last = last.split('?')[0];
+      if (!last) return `image_${Date.now()}.jpg`;
+      return last;
+    } catch {
+      return `image_${Date.now()}.jpg`;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const uri = result.assets[0].uri;
+  }
+
+  async function uploadImageToSupabase(uri: string, fileName?: string) {
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr) throw userErr;
+    const user = userData?.user;
+    if (!user) throw new Error('Usuário não autenticado');
+
+    const userId = user.id;
+    const name = fileName ?? getFileNameFromUri(uri);
+    const safeName = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
+    const ext = getFileExtFromName(safeName);
+
+    const filePath = `profiles/${userId}/${safeName}`;
+
+    const response = await fetch(uri);
+    const arrayBuffer = await response.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    const contentType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('imagem')
+      .upload(filePath, uint8Array as any, {
+        upsert: true,
+        contentType,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data: urlData } = supabase.storage.from('imagem').getPublicUrl(filePath);
+    const publicUrl = urlData?.publicUrl ?? null;
+    return { publicUrl, path: filePath };
+  }
+
+  const handlePickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Toast.show({ type: 'error', text1: 'Permissão negada', text2: 'Não foi possível acessar a galeria.' });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      const maybeFileName: string | undefined = (asset as any).fileName ?? (asset as any).name;
+
       setProfileImage(uri);
-      await AsyncStorage.setItem('userProfileImage', uri);
-      Toast.show({ type: 'success', text1: 'Foto salva localmente' });
+      Toast.show({ type: 'info', text1: 'Enviando imagem...', visibilityTime: 1000 });
+
+      try {
+        const { publicUrl } = await uploadImageToSupabase(uri, maybeFileName);
+
+        if (publicUrl) {
+          const publicWithTs = `${publicUrl}?t=${Date.now()}`;
+          setProfileImage(publicWithTs);
+          await AsyncStorage.setItem('userProfileImage', publicWithTs);
+          Toast.show({ type: 'success', text1: 'Foto atualizada', text2: 'Imagem enviada para o servidor.' });
+        } else {
+          await AsyncStorage.setItem('userProfileImage', uri);
+          setProfileImage(uri);
+          Toast.show({ type: 'success', text1: 'Foto salva localmente', text2: 'Upload realizado, mas sem URL pública.' });
+        }
+      } catch (err: any) {
+        console.warn('Erro upload imagem:', err);
+        await AsyncStorage.setItem('userProfileImage', uri);
+        setProfileImage(uri);
+        Toast.show({ type: 'error', text1: 'Erro no upload', text2: err?.message ?? 'Não foi possível enviar a imagem.' });
+      }
+    } catch (err) {
+      console.warn('handlePickImage error', err);
+      Toast.show({ type: 'error', text1: 'Erro', text2: 'Erro ao selecionar imagem.' });
     }
   };
 
@@ -157,9 +240,7 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
           <TouchableOpacity onPress={handlePickImage}>
             <Image
               source={{
-                uri: profileImage
-                  ? profileImage
-                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=007AFF&color=fff&size=128`,
+                uri: profileImage ? profileImage : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=007AFF&color=fff&size=128`,
               }}
               style={{ width: 72, height: 72, borderRadius: 36 }}
             />
@@ -193,10 +274,8 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         ))}
       </View>
 
-      {/* Dados Pessoais */}
       <View style={{ backgroundColor: '#fff', marginHorizontal: 20, marginTop: 20, borderRadius: 16, paddingVertical: 20, paddingHorizontal: 16 }}>
         <Text style={{ fontSize: 20, fontWeight: '700', color: '#222', marginBottom: 12 }}>Dados Pessoais</Text>
-
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
           <Text style={{ fontSize: 18, color: '#444' }}>Altura</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -204,7 +283,6 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
             <TouchableOpacity onPress={() => handleEditStats('altura')}><Ionicons name="create-outline" size={24} color="#58ad53" /></TouchableOpacity>
           </View>
         </View>
-
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 }}>
           <Text style={{ fontSize: 18, color: '#444' }}>Peso</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -214,10 +292,8 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         </View>
       </View>
 
-      {/* Metas Diárias */}
       <View style={{ backgroundColor: '#fff', marginHorizontal: 20, marginTop: 20, borderRadius: 16, paddingVertical: 20, paddingHorizontal: 16 }}>
         <Text style={{ fontSize: 20, fontWeight: '700', color: '#222', marginBottom: 12 }}>Metas Diárias</Text>
-
         {Object.entries(goals).map(([key, value]) => (
           <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
             <Text style={{ fontSize: 18, color: '#444' }}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
@@ -243,9 +319,7 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
             <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, textAlign: 'center' }}>
               Editar {selectedGoal ? (selectedGoal === 'name' ? 'Nome' : (selectedGoal.charAt(0).toUpperCase() + selectedGoal.slice(1))) : ''}
             </Text>
-
             <TextInput style={{ borderWidth: 1, borderColor: '#166534', padding: 12, borderRadius: 8 }} keyboardType={selectedGoal === 'name' ? 'default' : 'numeric'} autoCapitalize={selectedGoal === 'name' ? 'words' : 'none'} value={newValue} onChangeText={setNewValue} />
-
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
               <Pressable style={{ backgroundColor: '#ccc', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16 }} onPress={() => setModalVisible(false)}>
                 <Text>Cancelar</Text>

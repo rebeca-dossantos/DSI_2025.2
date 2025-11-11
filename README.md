@@ -19,6 +19,8 @@
 
     npm install react-native-toast-message
 
+    npm install react-native-svg react-native-chart-kit
+
     npm install expo-navigation-bar
     
     npx expo install @supabase/supabase-js @rneui/themed react-native-url-polyfill

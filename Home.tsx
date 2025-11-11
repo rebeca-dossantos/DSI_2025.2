@@ -8,6 +8,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import MapScreen from './Map';
 import ProfileScreen from './Profile';
+import { LineChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
 
 export type SavedMealItem = { id: number; name: string; qty: number; };
 
@@ -100,6 +102,423 @@ export function GlycemicBadge({ level }: { level?: string }) {
   );
 }
 
+// Tipos para dados históricos
+interface DailyNutrition {
+  date: string; // YYYY-MM-DD
+  protein: number;
+  carbs: number;
+  calories: number;
+}
+interface MonthlyNutrition {
+  month: string;
+  protein: number;
+  carbs: number;
+  calories: number;
+}
+
+const generateMonthlyData = async (): Promise<MonthlyNutrition[]> => {
+  try {
+    console.log('📊 Buscando dados reais para gráficos...');
+    
+    const keys = await AsyncStorage.getAllKeys();
+    const mealKeys = keys.filter(key => key.startsWith('meals_'));
+    
+    console.log('🗂️ Chaves encontradas:', mealKeys);
+    
+    const monthlyData: Record<string, { protein: number; carbs: number; calories: number; days: number }> = {};
+
+    for (const key of mealKeys) {
+      try {
+        const rawData = await AsyncStorage.getItem(key);
+        if (rawData) {
+          const meals = JSON.parse(rawData) as Record<string, SavedMealItem[]>;
+          
+          const dateStr = key.replace('meals_', '');
+          const [year, month] = dateStr.split('-');
+          const monthKey = `${year}-${month}`;
+          
+          // Corrigido: Inicializar valores do dia
+          let dayProtein = 0;
+          let dayCarbs = 0;
+          let dayCalories = 0;
+          
+          // Corrigido: Cálculo dos totais
+          Object.values(meals).forEach(items => {
+            items.forEach(it => {
+              const food = SAMPLE_FOODS.find(f => f.id === it.id);
+              if (food) {
+                const qty = it.qty ?? 1;
+                dayProtein += (food.protein ?? 0) * qty;
+                dayCarbs += (food.carbs ?? 0) * qty;
+                dayCalories += (food.cal ?? 0) * qty; // Corrigido: era dayCarbs += food.cal
+              }
+            });
+          });
+          
+          if (!monthlyData[monthKey]) {
+            monthlyData[monthKey] = { protein: 0, carbs: 0, calories: 0, days: 0 };
+          }
+          
+          monthlyData[monthKey].protein += dayProtein;
+          monthlyData[monthKey].carbs += dayCarbs;
+          monthlyData[monthKey].calories += dayCalories;
+          monthlyData[monthKey].days += 1;
+        }
+      } catch (err) {
+        console.warn(`Erro processando chave ${key}:`, err);
+      }
+    }
+    
+    // Calcular médias mensais
+    const result: MonthlyNutrition[] = Object.entries(monthlyData)
+      .map(([month, data]) => ({
+        month,
+        protein: Math.round(data.protein / data.days),
+        carbs: Math.round(data.carbs / data.days),
+        calories: Math.round(data.calories / data.days)
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-6);
+    
+    console.log('📈 Dados mensais calculados:', result);
+    return result;
+    
+  } catch (err) {
+    console.error('❌ Erro grave ao carregar dados mensais:', err);
+    return [];
+  }
+};
+
+// Metas padrão (serão substituídas pelas do usuário)
+const defaultGoals = {
+  protein: 120,
+  carbs: 220,
+  calories: 1800
+};
+
+// >>> CORREÇÃO: Mover funções para ANTES do componente HomeScreen
+const DAILY_NUTRI_PREFIX = 'nutri_';
+
+function formatDate(d: Date): string {
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+async function saveDailyNutrition(dateStr: string, totals: { protein: number; carbs: number; calories: number }) {
+  try {
+    const key = `${DAILY_NUTRI_PREFIX}${dateStr}`;
+    await AsyncStorage.setItem(key, JSON.stringify(totals));
+    console.log(`✅ Salvou nutrição diária para ${dateStr}:`, totals);
+  } catch (err) {
+    console.warn('❌ Erro salvando nutrição diária', err);
+  }
+}
+
+async function loadWeeklyNutrition(): Promise<DailyNutrition[]> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const nutriKeys = keys.filter(k => k.startsWith(DAILY_NUTRI_PREFIX));
+    const entries: DailyNutrition[] = [];
+    
+    for (const k of nutriKeys) {
+      const raw = await AsyncStorage.getItem(k);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw) as { protein: number; carbs: number; calories: number };
+        const date = k.replace(DAILY_NUTRI_PREFIX, '');
+        entries.push({
+          date,
+          protein: parsed.protein || 0,
+          carbs: parsed.carbs || 0,
+          calories: parsed.calories || 0,
+        });
+      } catch (e) {
+        console.warn('Erro parse nutri diária', k, e);
+      }
+    }
+    
+    // Ordenar por data e pegar últimos 7 dias
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    const last7 = entries.slice(-7);
+    console.log('📊 Dados semanais carregados:', last7);
+    return last7;
+  } catch (err) {
+    console.warn('❌ Erro carregando histórico semanal', err);
+    return [];
+  }
+}
+
+// >>> CORREÇÃO: Mover componente WeeklyChartsSection para ANTES do HomeScreen
+const WeeklyChartsSection = ({ version, goals }: { version: number; goals: { protein: number; carbs: number; calories: number } }) => {
+  const [weekData, setWeekData] = useState<DailyNutrition[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadWeek = async () => {
+      setLoading(true);
+      const data = await loadWeeklyNutrition();
+      setWeekData(data);
+      setLoading(false);
+    };
+    loadWeek();
+  }, [version]);
+
+  // Datas da semana atual (domingo -> sábado)
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setHours(0, 0, 0, 0);
+  startOfWeek.setDate(today.getDate() - today.getDay()); // 0 = domingo
+
+  const weekDates: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    return d;
+  });
+
+  const fmtKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const labels = weekDates.map(
+    d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+  );
+
+  const dataByDate = new Map(weekData.map(d => [d.date, d]));
+
+  function buildChart(nutrient: 'protein' | 'carbs' | 'calories', color: string, label: string, unit: string) {
+    if (loading) {
+      return (
+        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 18 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>{label} - Semana</Text>
+          <Text style={{ color: '#666' }}>Carregando...</Text>
+        </View>
+      );
+    }
+
+    const consumed = weekDates.map(d => {
+      const entry = dataByDate.get(fmtKey(d));
+      return entry ? entry[nutrient] : 0;
+    });
+
+    const goalVal = goals[nutrient];
+    const goalLine = Array(7).fill(goalVal);
+    const maxVal = Math.max(goalVal, ...consumed) * 1.15;
+
+    return (
+      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 18 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 6 }}>{label} - Semana</Text>
+        <LineChart
+          data={{
+            labels,
+            datasets: [
+              {
+                data: consumed,
+                color: () => color,
+                strokeWidth: 3,
+              },
+              {
+                data: goalLine,
+                color: () => '#999',
+                strokeWidth: 2,
+                withDots: false,
+              },
+            ],
+            legend: ['Consumido', 'Meta'],
+          }}
+          width={Dimensions.get('window').width - 64}
+          height={200}
+          fromZero
+          yAxisSuffix={unit}
+          chartConfig={{
+            backgroundColor: '#ffffff',
+            backgroundGradientFrom: '#ffffff',
+            backgroundGradientTo: '#ffffff',
+            decimalPlaces: 0,
+            color: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+            labelColor: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+            style: { borderRadius: 16 },
+            propsForDots: { r: '5', strokeWidth: '2', stroke: color },
+          }}
+          bezier
+          style={{ borderRadius: 16, marginVertical: 8 }}
+        />
+        <Text style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
+          Meta diária: {goalVal}{unit} • Média semana: {consumed.length > 0 ? Math.round((consumed.reduce((s, n) => s + n, 0) / consumed.length) * 10) / 10 : 0}{unit}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ marginTop: 8 }}>
+      {buildChart('protein', '#3498db', 'Proteínas', 'g')}
+      {buildChart('carbs', '#e74c3c', 'Carboidratos', 'g')}
+      {buildChart('calories', '#f39c12', 'Calorias', 'kcal')}
+    </View>
+  );
+};
+
+// Extraído: MonthlyChartsSection movido para nível superior para evitar redefinição de HomeScreen duplicada
+const MonthlyChartsSection = ({ version }: { version: number }) => {
+  const [monthlyData, setMonthlyData] = useState<MonthlyNutrition[]>([]);
+  const [goals, setGoals] = useState(defaultGoals);
+  const [selectedPeriod, setSelectedPeriod] = useState('6m');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    console.log('🔄 MonthlyChartsSection: Recarregando dados...');
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const storedGoals = await AsyncStorage.getItem('userGoals');
+        if (storedGoals) {
+          const userGoals = JSON.parse(storedGoals);
+            setGoals({
+              protein: userGoals.proteina || defaultGoals.protein,
+              carbs: userGoals.carboidratos || defaultGoals.carbs,
+              calories: userGoals.calorias || defaultGoals.calories
+            });
+        }
+        const realData = await generateMonthlyData();
+        setMonthlyData(realData);
+      } catch (err) {
+        console.warn('Erro carregando dados mensais:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [version]);
+
+  const filteredData = monthlyData.slice(-parseInt(selectedPeriod));
+
+  const MonthlyChart = ({ nutrient, color, label, unit }: { 
+    nutrient: 'protein' | 'carbs' | 'calories', 
+    color: string, 
+    label: string, 
+    unit: string 
+  }) => {
+    if (loading) {
+      return (
+        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12 }}>{label} - Mensal</Text>
+          <Text>Carregando dados...</Text>
+        </View>
+      );
+    }
+
+    if (filteredData.length === 0) {
+      return (
+        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12 }}>{label} - Mensal</Text>
+          <Text style={{ color: '#666' }}>Nenhum dado histórico encontrado</Text>
+          <Text style={{ color: '#666', fontSize: 12, marginTop: 8 }}>Adicione refeições para ver o histórico</Text>
+        </View>
+      );
+    }
+
+    const labels = filteredData.map(item => {
+      const [year, month] = item.month.split('-');
+      return `${month}/${year.slice(2)}`;
+    });
+
+    const data = filteredData.map(item => item[nutrient]);
+    const goal = goals[nutrient];
+    const maxValue = Math.max(...data, goal) * 1.1;
+    const chartHeight = 200;
+    const goalPosition = chartHeight - (goal / maxValue) * chartHeight;
+
+    return (
+      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600' }}>{label} - Mensal</Text>
+          <View style={{ flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 8 }}>
+            {['6m', '3m', '1m'].map(period => (
+              <TouchableOpacity
+                key={period}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  backgroundColor: selectedPeriod === period ? '#3498db' : 'transparent',
+                  borderRadius: 6
+                }}
+                onPress={() => setSelectedPeriod(period)}
+              >
+                <Text style={{ color: selectedPeriod === period ? '#fff' : '#666', fontSize: 12 }}>
+                  {period}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={{ height: chartHeight }}>
+          <LineChart
+            data={{
+              labels,
+              datasets: [{ 
+                data: data.length > 0 ? data : [0],
+                color: () => color,
+                strokeWidth: 3 
+              }],
+            }}
+            width={Dimensions.get('window').width - 72}
+            height={chartHeight}
+            chartConfig={{
+              backgroundColor: '#ffffff',
+              backgroundGradientFrom: '#ffffff',
+              backgroundGradientTo: '#ffffff',
+              decimalPlaces: 0,
+              color: (opacity = 1) => color,
+              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+              style: { borderRadius: 16 },
+              propsForDots: { r: '5', strokeWidth: '2', stroke: color },
+            }}
+            bezier
+            style={{ borderRadius: 16 }}
+            withVerticalLines={false}
+            withHorizontalLines={true}
+            fromZero
+          />
+          <View style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: goalPosition,
+            borderTopWidth: 2,
+            borderTopColor: '#666',
+            borderStyle: 'dashed'
+          }} />
+          <View style={{
+            position: 'absolute',
+            right: 8,
+            top: goalPosition - 10,
+            backgroundColor: '#fff',
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 4,
+            borderWidth: 1,
+            borderColor: '#ddd'
+          }}>
+            <Text style={{ fontSize: 10, color: '#666', fontWeight: '600' }}>
+              Meta: {goal}{unit}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View>
+      <MonthlyChart nutrient="protein" color="#3498db" label="Proteínas" unit="g" />
+      <MonthlyChart nutrient="carbs" color="#e74c3c" label="Carboidratos" unit="g" />
+      <MonthlyChart nutrient="calories" color="#f39c12" label="Calorias" unit="kcal" />
+    </View>
+  );
+};
+
 function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   const userEmail = route?.params?.userEmail ?? 'Usuário';
 
@@ -107,6 +526,16 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
   const [totalProtein, setTotalProtein] = useState<number>(0);
   const [totalCarbs, setTotalCarbs] = useState<number>(0);
   const [totalCalories, setTotalCalories] = useState<number>(0);
+  const [historicalData, setHistoricalData] = useState<DailyNutrition[]>([]);
+  const [goals, setGoals] = useState(defaultGoals);
+
+  const [chartsVersion, setChartsVersion] = useState(0);
+  const [weeklyData, setWeeklyData] = useState<DailyNutrition[]>([]);
+
+  const refreshCharts = () => {
+    setChartsVersion(prev => prev + 1);
+    console.log('🔄 Forçando atualização dos gráficos...');
+  };
 
   useEffect(() => {
   const computeTotals = async (mealsSaved: Record<string, SavedMealItem[]>) => {
@@ -127,26 +556,32 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
     const totalC = Math.round(c * 10) / 10;
     const totalCal = Math.round(cal);
 
-    // atualiza os estados
     setTotalProtein(totalP);
     setTotalCarbs(totalC);
     setTotalCalories(totalCal);
 
-    // 🔹 salva no AsyncStorage para o perfil
     const stats = {
       proteina: totalP,
       carboidrato: totalC,
       calorias: totalCal,
-      dias: 12, // temporário — depois automatizamos
+      dias: 12,
       peso: 70,
       altura: 170,
     };
 
     try {
       await AsyncStorage.setItem('userStats', JSON.stringify(stats));
-      console.log('✅ Estatísticas atualizadas no AsyncStorage:', stats);
+      
+      const today = formatDate(new Date());
+      await saveDailyNutrition(today, {
+        protein: totalP,
+        carbs: totalC,
+        calories: totalCal,
+      });
+      
+      console.log('✅ Totais salvos:', { totalP, totalC, totalCal });
     } catch (err) {
-      console.warn('Erro salvando userStats:', err);
+      console.warn('❌ Erro salvando userStats/nutri diária:', err);
     }
   };
 
@@ -154,13 +589,21 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
     const data = await loadMealsForToday();
     setMeals(data);
     await computeTotals(data);
+
+    const week = await loadWeeklyNutrition();
+    setWeeklyData(week);
+
+    console.log('🔄 Recarregando dados...');
+    console.log('📅 Refeições hoje:', data);
+    console.log('📊 Totais:', { totalProtein, totalCarbs, totalCalories });
+
+    refreshCharts();
   };
 
   const unsub = navigation.addListener('focus', loadAndCompute);
   loadAndCompute();
   return unsub;
 }, [navigation]);
-
 
   function joinAndTruncate(names: string[], maxChars = 36) {
     const joined = names.join(' • ');
@@ -202,7 +645,7 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
                 proteina: totalProtein,
                 carboidrato: totalCarbs,
                 calorias: totalCalories,
-                dias: 12, // temporário — depois podemos calcular com base no histórico
+                dias: 12,
                 peso: 70,
                 altura: 170,
               };
@@ -217,11 +660,12 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
       { cancelable: true }
     );
   };
-
   return (
-    <SafeAreaView style={{ flex: 1, padding: 20 }}>
-      <Text style={{ fontSize: 22, fontWeight: '700', textAlign: 'center', marginTop: 20 }}>Hoje</Text>
+  <SafeAreaView style={{ flex: 1, padding: 20 }}>
+    <Text style={{ fontSize: 22, fontWeight: '700', textAlign: 'center', marginTop: 20 }}>Hoje</Text>
 
+    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      {/* Cards de totais */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30 }}>
         <View style={{ flex: 1, backgroundColor: '#fff', marginHorizontal: 6, paddingVertical: 18, borderRadius: 12, alignItems: 'center' }}>
           <Text style={{ color: '#666' }}>Proteínas</Text>
@@ -237,12 +681,14 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
         </View>
       </View>
 
+      {/* Botão adicionar lanche */}
       <TouchableOpacity style={{ marginTop: 20, backgroundColor: '#86efac', paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
         onPress={() => (navigation as any).navigate('AddFood', { meal: 'Lanche' })}>
         <Text style={{ color: '#166534', fontSize: 16, fontWeight: '600' }}>Adicionar lanche</Text>
       </TouchableOpacity>
 
-      <ScrollView style={{ marginTop: 24 }}>
+      {/* Refeições */}
+      <View style={{ marginTop: 24 }}>
         {/* Café */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12 }}>
           <Text style={{ fontSize: 22, marginRight: 10 }}>☕</Text>
@@ -278,14 +724,18 @@ function HomeScreen({ navigation, route }: { navigation: any; route: any }) {
             <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>+</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
 
-      {/* botão temporário de reset (apenas para testes): remover posteriormente */}
-      <TouchableOpacity style={{ marginTop: 12, backgroundColor: '#e74c3c', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }} onPress={handleResetMeals}>
+      {/* >>> Gráficos semanais */}
+      <WeeklyChartsSection version={chartsVersion} goals={goals} />
+
+      {/* Botão de reset */}
+      <TouchableOpacity style={{ marginTop: 20, backgroundColor: '#e74c3c', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }} onPress={handleResetMeals}>
         <Text style={{ color: '#fff', fontWeight: '600' }}>Resetar alimentos (teste)</Text>
       </TouchableOpacity>
-    </SafeAreaView>
-  );
+    </ScrollView>
+  </SafeAreaView>
+);
 }
 
 export function AddFoodScreen({ navigation, route }: { navigation: any; route: any }) {

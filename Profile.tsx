@@ -1,6 +1,5 @@
-// Profile.tsx
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View, Text, Image, TouchableOpacity, Modal, TextInput, Pressable, Linking } from 'react-native';
+import { ScrollView, View, Text, Image, TouchableOpacity, TextInput, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,6 +10,11 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('Usuário de Teste');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedUserName, setEditedUserName] = useState('');
+  const [editedStats, setEditedStats] = useState<any>({});
+  const [editedGoals, setEditedGoals] = useState<any>({});
 
   const [userStats, setUserStats] = useState({
     dias: 0,
@@ -27,28 +31,6 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
     carboidratos: 220,
     gordura: 60,
   });
-
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState<null | string>(null);
-  const [newValue, setNewValue] = useState('');
-
-  const handleEditStats = (key: string) => {
-    setSelectedGoal(key);
-    setNewValue(String((userStats as any)[key]));
-    setModalVisible(true);
-  };
-
-  const handleEditGoals = (key: string) => {
-    setSelectedGoal(key);
-    setNewValue(String((goals as any)[key]));
-    setModalVisible(true);
-  };
-
-  const handleEditName = () => {
-    setSelectedGoal('name');
-    setNewValue(userName);
-    setModalVisible(true);
-  };
 
   function getFileExtFromName(name: string) {
     const m = name.match(/\.([a-zA-Z0-9]+)(\?.*)?$/);
@@ -81,34 +63,30 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
     const ext = getFileExtFromName(safeName);
 
     const filePath = `profiles/${userId}/${safeName}`;
-
     const response = await fetch(uri);
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
     const contentType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('imagem')
       .upload(filePath, uint8Array as any, {
         upsert: true,
         contentType,
       });
 
-    if (uploadError) {
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     const { data: urlData } = supabase.storage.from('imagem').getPublicUrl(filePath);
-    const publicUrl = urlData?.publicUrl ?? null;
-    return { publicUrl, path: filePath };
+    return urlData?.publicUrl ?? null;
   }
 
   const handlePickImage = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Toast.show({ type: 'error', text1: 'Permissão negada', text2: 'Não foi possível acessar a galeria.' });
+        Toast.show({ type: 'error', text1: 'Permissão negada', text2: 'Sem acesso à galeria.' });
         return;
       }
 
@@ -119,60 +97,53 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         quality: 0.8,
       });
 
-      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      if (result.canceled || !result.assets?.length) return;
 
       const asset = result.assets[0];
       const uri = asset.uri;
       const maybeFileName: string | undefined = (asset as any).fileName ?? (asset as any).name;
 
       setProfileImage(uri);
-      Toast.show({ type: 'info', text1: 'Enviando imagem...', visibilityTime: 1000 });
+      Toast.show({ type: 'info', text1: 'Enviando imagem...' });
 
       try {
-        const { publicUrl } = await uploadImageToSupabase(uri, maybeFileName);
+        const publicUrl = await uploadImageToSupabase(uri, maybeFileName);
+        const finalUrl = publicUrl ? `${publicUrl}?t=${Date.now()}` : uri;
 
-        if (publicUrl) {
-          const publicWithTs = `${publicUrl}?t=${Date.now()}`;
-          setProfileImage(publicWithTs);
-          await AsyncStorage.setItem('userProfileImage', publicWithTs);
-          Toast.show({ type: 'success', text1: 'Foto atualizada', text2: 'Imagem enviada para o servidor.' });
-        } else {
-          await AsyncStorage.setItem('userProfileImage', uri);
-          setProfileImage(uri);
-          Toast.show({ type: 'success', text1: 'Foto salva localmente', text2: 'Upload realizado, mas sem URL pública.' });
-        }
-      } catch (err: any) {
-        console.warn('Erro upload imagem:', err);
-        await AsyncStorage.setItem('userProfileImage', uri);
-        setProfileImage(uri);
-        Toast.show({ type: 'error', text1: 'Erro no upload', text2: err?.message ?? 'Não foi possível enviar a imagem.' });
+        await AsyncStorage.setItem('userProfileImage', finalUrl);
+        setProfileImage(finalUrl);
+
+        Toast.show({ type: 'success', text1: 'Foto atualizada!' });
+      } catch {
+        Toast.show({ type: 'info', text1: 'Salvo localmente' });
       }
     } catch (err) {
-      console.warn('handlePickImage error', err);
-      Toast.show({ type: 'error', text1: 'Erro', text2: 'Erro ao selecionar imagem.' });
+      console.warn(err);
+      Toast.show({ type: 'error', text1: 'Erro ao selecionar imagem.' });
     }
   };
 
-  const saveGoal = () => {
-    if (!selectedGoal) {
-      setModalVisible(false);
-      return;
-    }
+  const startEditing = () => {
+    setEditedUserName(userName);
+    setEditedStats({ ...userStats });
+    setEditedGoals({ ...goals });
+    setIsEditing(true);
+  };
 
-    if (selectedGoal === 'name') {
-      setUserName(newValue.trim() || 'Usuário de Teste');
-      AsyncStorage.setItem('lastLoggedUserName', newValue.trim() || 'Usuário de Teste');
-    } else if (!isNaN(Number(newValue))) {
-      if ((userStats as any).hasOwnProperty(selectedGoal)) {
-        const updated = { ...userStats, [selectedGoal]: Number(newValue) };
-        setUserStats(updated);
-        AsyncStorage.setItem('userStats', JSON.stringify(updated));
-      } else {
-        setGoals({ ...goals, [selectedGoal]: Number(newValue) });
-      }
-    }
-    setModalVisible(false);
-    setSelectedGoal(null);
+  const saveChanges = async () => {
+    setUserName(editedUserName);
+    setUserStats(editedStats);
+    setGoals(editedGoals);
+
+    await AsyncStorage.setItem('lastLoggedUserName', editedUserName);
+    await AsyncStorage.setItem('userStats', JSON.stringify(editedStats));
+
+    setIsEditing(false);
+    Toast.show({ type: 'success', text1: 'Perfil atualizado!' });
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
   };
 
   useEffect(() => {
@@ -185,12 +156,8 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         const storedImage = await AsyncStorage.getItem('userProfileImage');
         if (storedImage) setProfileImage(storedImage);
         const storedStats = await AsyncStorage.getItem('userStats');
-        if (storedStats) {
-          const parsedStats = JSON.parse(storedStats);
-          setUserStats(prev => ({ ...prev, ...parsedStats }));
-        }
+        if (storedStats) setUserStats(prev => ({ ...prev, ...JSON.parse(storedStats) }));
 
-        // atualiza dias usados
         const today = new Date().toISOString().slice(0, 10);
         const lastDate = await AsyncStorage.getItem('lastOpenDate');
         let days = Number((await AsyncStorage.getItem('daysUsed')) || '0');
@@ -200,142 +167,158 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
           await AsyncStorage.setItem('daysUsed', String(days));
         }
         setUserStats(prev => ({ ...prev, dias: days }));
-      } catch (err) {
-        console.warn('Erro ao carregar usuário:', err);
-      }
+      } catch {}
     };
+
     loadUser();
   }, []);
 
   const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.warn('SignOut error', error);
-        Toast.show({ type: 'error', text1: 'Erro', text2: 'Não foi possível deslogar.' });
-        return;
-      }
-      const keysToRemove = [
-        'lastLoggedUser',
-        'lastLoggedUserName',
-        'userProfileImage',
-        'userStats',
-        'lastOpenDate',
-        'daysUsed',
-      ];
-      await AsyncStorage.multiRemove(keysToRemove);
-      Toast.show({ type: 'success', text1: 'Deslogado', text2: 'Você foi deslogado com sucesso.' });
-      navigation.replace('Login');
-    } catch (err) {
-      console.warn('Logout error', err);
-      Toast.show({ type: 'error', text1: 'Erro', text2: 'Erro ao tentar deslogar.' });
-    }
+    const { error } = await supabase.auth.signOut();
+    if (error) return;
+
+    const keys = ['lastLoggedUser', 'lastLoggedUserName', 'userProfileImage', 'userStats', 'lastOpenDate', 'daysUsed'];
+    await AsyncStorage.multiRemove(keys);
+
+    navigation.replace('Login');
   };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#f5f7f6' }} contentContainerStyle={{ paddingBottom: 30 }}>
+
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 24, backgroundColor: '#fff' }}>
-        <View style={{ marginRight: 16 }}>
-          <TouchableOpacity onPress={handlePickImage}>
-            <Image
-              source={{
-                uri: profileImage ? profileImage : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=007AFF&color=fff&size=128`,
-              }}
-              style={{ width: 72, height: 72, borderRadius: 36 }}
-            />
-            <Ionicons
-              name="camera-outline"
-              size={20}
-              color="#2f80ed"
-              style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: '#fff', borderRadius: 10, padding: 2 }}
-            />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={handlePickImage}>
+          <Image
+            source={{
+              uri: profileImage ? profileImage : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=007AFF&color=fff&size=128`,
+            }}
+            style={{ width: 72, height: 72, borderRadius: 36 }}
+          />
+        </TouchableOpacity>
 
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1, marginLeft: 16 }}>
+          {isEditing ? (
+            <TextInput
+              style={{ fontSize: 24, fontWeight: '600', borderBottomWidth: 1, borderColor: '#ccc' }}
+              value={editedUserName}
+              onChangeText={setEditedUserName}
+            />
+          ) : (
             <Text style={{ fontSize: 25, fontWeight: '600', color: '#222' }}>{userName}</Text>
-            <TouchableOpacity onPress={handleEditName} style={{ marginLeft: 8 }}>
-              <Ionicons name="create-outline" size={22} color="#2f80ed" />
-            </TouchableOpacity>
-          </View>
+          )}
           <Text style={{ fontSize: 15, color: '#666', marginTop: 4 }}>{userEmail}</Text>
         </View>
+
+        {!isEditing && (
+          <TouchableOpacity onPress={startEditing}>
+            <Ionicons name="create-outline" size={26} color="#2f80ed" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Estatísticas */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 15 }}>
-        {[{ label: 'Dias consecutivos', value: userStats.dias }, { label: 'Média carb/dia', value: userStats.carboidrato }, { label: 'Média proteínas/dia', value: userStats.proteina }, { label: 'Média kcal/dia', value: userStats.calorias }].map((stat, index) => (
-          <View key={index} style={{ width: '47%', backgroundColor: '#fff', borderRadius: 12, paddingVertical: 18, paddingHorizontal: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
-            <Text style={{ fontSize: 15, color: '#666', marginBottom: 4 }}>{stat.label}</Text>
-            <Text style={{ fontSize: 20, fontWeight: '600', color: '#222' }}>{stat.value}</Text>
+        {[{ label: 'Dias consecutivos', key: 'dias' },
+          { label: 'Média carb/dia', key: 'carboidrato' },
+          { label: 'Média proteínas/dia', key: 'proteina' },
+          { label: 'Média kcal/dia', key: 'calorias' }
+        ].map((item, i) => (
+          <View key={i} style={{ width: '47%', backgroundColor: '#fff', borderRadius: 12, padding: 18, marginBottom: 12 }}>
+            <Text style={{ fontSize: 15, color: '#666' }}>{item.label}</Text>
+
+            {isEditing ? (
+              <TextInput
+                style={{ fontSize: 20, fontWeight: '600', borderBottomWidth: 1 }}
+                keyboardType="numeric"
+                value={String(editedStats[item.key])}
+                onChangeText={v => setEditedStats({ ...editedStats, [item.key]: Number(v) })}
+              />
+            ) : (
+              <Text style={{ fontSize: 20, fontWeight: '600' }}>{userStats[item.key as keyof typeof userStats]}</Text>
+            )}
           </View>
         ))}
       </View>
 
-      <View style={{ backgroundColor: '#fff', marginHorizontal: 20, marginTop: 20, borderRadius: 16, paddingVertical: 20, paddingHorizontal: 16 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700', color: '#222', marginBottom: 12 }}>Dados Pessoais</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-          <Text style={{ fontSize: 18, color: '#444' }}>Altura</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111' }}>{userStats.altura} cm</Text>
-            <TouchableOpacity onPress={() => handleEditStats('altura')}><Ionicons name="create-outline" size={24} color="#58ad53" /></TouchableOpacity>
+      {/* Dados pessoais */}
+      <View style={{ backgroundColor: '#fff', marginHorizontal: 20, marginTop: 20, borderRadius: 16, padding: 20 }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Dados Pessoais</Text>
+
+        {['altura', 'peso'].map(key => (
+          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 }}>
+            <Text style={{ fontSize: 18 }}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
+
+            {isEditing ? (
+              <TextInput
+                style={{ borderBottomWidth: 1, width: 80, textAlign: 'right' }}
+                keyboardType="numeric"
+                value={String(editedStats[key])}
+                onChangeText={v => setEditedStats({ ...editedStats, [key]: Number(v) })}
+              />
+            ) : (
+              <Text style={{ fontSize: 18, fontWeight: '600' }}>
+                {userStats[key as keyof typeof userStats]} {key === 'altura' ? 'cm' : 'Kg'}
+              </Text>
+            )}
           </View>
-        </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 }}>
-          <Text style={{ fontSize: 18, color: '#444' }}>Peso</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: '#111' }}>{userStats.peso} Kg</Text>
-            <TouchableOpacity onPress={() => handleEditStats('peso')}><Ionicons name="create-outline" size={24} color="#58ad53" /></TouchableOpacity>
-          </View>
-        </View>
+        ))}
       </View>
 
-      <View style={{ backgroundColor: '#fff', marginHorizontal: 20, marginTop: 20, borderRadius: 16, paddingVertical: 20, paddingHorizontal: 16 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700', color: '#222', marginBottom: 12 }}>Metas Diárias</Text>
+      {/* Metas */}
+      <View style={{ backgroundColor: '#fff', marginHorizontal: 20, marginTop: 20, borderRadius: 16, padding: 20 }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Metas Diárias</Text>
+
         {Object.entries(goals).map(([key, value]) => (
-          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-            <Text style={{ fontSize: 18, color: '#444' }}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', color: '#111' }}>{value}{key === 'calorias' ? ' kcal' : ' g'}</Text>
-              <TouchableOpacity onPress={() => handleEditGoals(key)}><Ionicons name="create-outline" size={24} color="#2f80ed" /></TouchableOpacity>
-            </View>
+          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 }}>
+            <Text style={{ fontSize: 18 }}>{key}</Text>
+
+            {isEditing ? (
+              <TextInput
+                style={{ borderBottomWidth: 1, width: 80, textAlign: 'right' }}
+                keyboardType="numeric"
+                value={String(editedGoals[key])}
+                onChangeText={v => setEditedGoals({ ...editedGoals, [key]: Number(v) })}
+              />
+            ) : (
+              <Text style={{ fontSize: 18, fontWeight: '600' }}>
+                {value}{key === 'calorias' ? ' kcal' : ' g'}
+              </Text>
+            )}
           </View>
         ))}
       </View>
 
-      {/* Botão de Deslogar */}
-      <View style={{ marginHorizontal: 20, marginTop: 24 }}>
-        <TouchableOpacity onPress={handleLogout} style={{ backgroundColor: '#86efac', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 12 }}>
-          <Text style={{ color: '#166534', fontWeight: '700' }}>Deslogar</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Salvar / Cancelar */}
+      {isEditing && (
+        <View style={{ marginHorizontal: 20, marginTop: 24 }}>
+          <TouchableOpacity onPress={saveChanges} style={{ backgroundColor: '#2ecc71', padding: 14, borderRadius: 12, marginBottom: 12 }}>
+            <Text style={{ textAlign: 'center', fontWeight: '700', color: '#fff' }}>Salvar Alterações</Text>
+          </TouchableOpacity>
 
-      {/* Modal de edição */}
-      <Modal transparent animationType="fade" visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, width: '80%' }}>
-            <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12, textAlign: 'center' }}>
-              Editar {selectedGoal ? (selectedGoal === 'name' ? 'Nome' : (selectedGoal.charAt(0).toUpperCase() + selectedGoal.slice(1))) : ''}
-            </Text>
-            <TextInput style={{ borderWidth: 1, borderColor: '#166534', padding: 12, borderRadius: 8 }} keyboardType={selectedGoal === 'name' ? 'default' : 'numeric'} autoCapitalize={selectedGoal === 'name' ? 'words' : 'none'} value={newValue} onChangeText={setNewValue} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-              <Pressable style={{ backgroundColor: '#ccc', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16 }} onPress={() => setModalVisible(false)}>
-                <Text>Cancelar</Text>
-              </Pressable>
-              <Pressable style={{ backgroundColor: '#58ad53', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16 }} onPress={saveGoal}>
-                <Text style={{ color: '#fff' }}>Salvar</Text>
-              </Pressable>
-            </View>
-          </View>
+          <TouchableOpacity onPress={cancelEditing} style={{ backgroundColor: '#ccc', padding: 14, borderRadius: 12 }}>
+            <Text style={{ textAlign: 'center', fontWeight: '700' }}>Cancelar</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+      )}
 
-      {/* Botão de Emergência */}
-      <TouchableOpacity style={{ backgroundColor: '#e74c3c', paddingVertical: 16, marginHorizontal: 16, borderRadius: 12, marginTop: 30, alignItems: 'center' }} onPress={() => Linking.openURL('tel:192')}>
-        <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Ligar para Emergência</Text>
+      {/* Logout */}
+      {!isEditing && (
+        <View style={{ marginHorizontal: 20, marginTop: 24 }}>
+          <TouchableOpacity onPress={handleLogout} style={{ backgroundColor: '#86efac', padding: 14, borderRadius: 12 }}>
+            <Text style={{ textAlign: 'center', fontWeight: '700', color: '#166534' }}>Deslogar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Emergência */}
+      <TouchableOpacity
+        style={{ backgroundColor: '#e74c3c', paddingVertical: 16, marginHorizontal: 16, borderRadius: 12, marginTop: 30 }}
+        onPress={() => Linking.openURL('tel:192')}
+      >
+        <Text style={{ textAlign: 'center', color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Ligar para Emergência</Text>
       </TouchableOpacity>
+
     </ScrollView>
   );
 }

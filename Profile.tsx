@@ -11,10 +11,8 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
   const [userName, setUserName] = useState('Usuário de Teste');
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedUserName, setEditedUserName] = useState('');
-  const [editedStats, setEditedStats] = useState<any>({});
-  const [editedGoals, setEditedGoals] = useState<any>({});
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [tempValue, setTempValue] = useState('');
 
   const [userStats, setUserStats] = useState({
     dias: 0,
@@ -123,27 +121,32 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
     }
   };
 
-  const startEditing = () => {
-    setEditedUserName(userName);
-    setEditedStats({ ...userStats });
-    setEditedGoals({ ...goals });
-    setIsEditing(true);
+  const startEditing = (field: string, currentValue: string | number) => {
+    setEditingField(field);
+    setTempValue(String(currentValue));
   };
 
-  const saveChanges = async () => {
-    setUserName(editedUserName);
-    setUserStats(editedStats);
-    setGoals(editedGoals);
+  const saveField = async () => {
+    if (!editingField) return;
 
-    await AsyncStorage.setItem('lastLoggedUserName', editedUserName);
-    await AsyncStorage.setItem('userStats', JSON.stringify(editedStats));
+    if (editingField === 'userName') {
+      setUserName(tempValue);
+      await AsyncStorage.setItem('lastLoggedUserName', tempValue);
+    } else if (editingField in userStats) {
+      const newStats = { ...userStats, [editingField]: Number(tempValue) };
+      setUserStats(newStats);
+      await AsyncStorage.setItem('userStats', JSON.stringify(newStats));
+    } else if (editingField in goals) {
+      const newGoals = { ...goals, [editingField]: Number(tempValue) };
+      setGoals(newGoals);
+    }
 
-    setIsEditing(false);
-    Toast.show({ type: 'success', text1: 'Perfil atualizado!' });
+    setEditingField(null);
+    Toast.show({ type: 'success', text1: 'Campo atualizado!' });
   };
 
   const cancelEditing = () => {
-    setIsEditing(false);
+    setEditingField(null);
   };
 
   useEffect(() => {
@@ -198,20 +201,27 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         </TouchableOpacity>
 
         <View style={{ flex: 1, marginLeft: 16 }}>
-          {isEditing ? (
-            <TextInput
-              style={{ fontSize: 24, fontWeight: '600', borderBottomWidth: 1, borderColor: '#ccc' }}
-              value={editedUserName}
-              onChangeText={setEditedUserName}
-            />
+          {editingField === 'userName' ? (
+            <View>
+              <TextInput
+                style={{ fontSize: 24, fontWeight: '600', borderBottomWidth: 1, borderColor: '#ccc' }}
+                value={tempValue}
+                onChangeText={setTempValue}
+                onSubmitEditing={saveField}
+                onBlur={saveField}
+                autoFocus
+              />
+            </View>
           ) : (
-            <Text style={{ fontSize: 25, fontWeight: '600', color: '#222' }}>{userName}</Text>
+            <>
+              <Text style={{ fontSize: 25, fontWeight: '600', color: '#222' }}>{userName}</Text>
+              <Text style={{ fontSize: 15, color: '#666', marginTop: 4 }}>{userEmail}</Text>
+            </>
           )}
-          <Text style={{ fontSize: 15, color: '#666', marginTop: 4 }}>{userEmail}</Text>
         </View>
 
-        {!isEditing && (
-          <TouchableOpacity onPress={startEditing}>
+        {editingField !== 'userName' && (
+          <TouchableOpacity onPress={() => startEditing('userName', userName)}>
             <Ionicons name="create-outline" size={26} color="#2f80ed" />
           </TouchableOpacity>
         )}
@@ -219,23 +229,33 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
 
       {/* Estatísticas */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 15 }}>
-        {[{ label: 'Dias consecutivos', key: 'dias' },
-          { label: 'Média carb/dia', key: 'carboidrato' },
-          { label: 'Média proteínas/dia', key: 'proteina' },
-          { label: 'Média kcal/dia', key: 'calorias' }
+        {[{ label: 'Dias consecutivos', key: 'dias', editable: false },
+          { label: 'Média carb/dia', key: 'carboidrato', editable: true },
+          { label: 'Média proteínas/dia', key: 'proteina', editable: true },
+          { label: 'Média kcal/dia', key: 'calorias', editable: true }
         ].map((item, i) => (
           <View key={i} style={{ width: '47%', backgroundColor: '#fff', borderRadius: 12, padding: 18, marginBottom: 12 }}>
             <Text style={{ fontSize: 15, color: '#666' }}>{item.label}</Text>
 
-            {isEditing ? (
+            {editingField === item.key ? (
               <TextInput
                 style={{ fontSize: 20, fontWeight: '600', borderBottomWidth: 1 }}
                 keyboardType="numeric"
-                value={String(editedStats[item.key])}
-                onChangeText={v => setEditedStats({ ...editedStats, [item.key]: Number(v) })}
+                value={tempValue}
+                onChangeText={setTempValue}
+                onSubmitEditing={saveField}
+                onBlur={saveField}
+                autoFocus
               />
             ) : (
-              <Text style={{ fontSize: 20, fontWeight: '600' }}>{userStats[item.key as keyof typeof userStats]}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 20, fontWeight: '600' }}>{userStats[item.key as keyof typeof userStats]}</Text>
+                {item.editable && (
+                  <TouchableOpacity onPress={() => startEditing(item.key, userStats[item.key as keyof typeof userStats])}>
+                    <Ionicons name="create-outline" size={20} color="#2f80ed" />
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </View>
         ))}
@@ -246,20 +266,28 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Dados Pessoais</Text>
 
         {['altura', 'peso'].map(key => (
-          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 }}>
+          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }}>
             <Text style={{ fontSize: 18 }}>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
 
-            {isEditing ? (
+            {editingField === key ? (
               <TextInput
-                style={{ borderBottomWidth: 1, width: 80, textAlign: 'right' }}
+                style={{ borderBottomWidth: 1, width: 80, textAlign: 'right', fontSize: 18, fontWeight: '600' }}
                 keyboardType="numeric"
-                value={String(editedStats[key])}
-                onChangeText={v => setEditedStats({ ...editedStats, [key]: Number(v) })}
+                value={tempValue}
+                onChangeText={setTempValue}
+                onSubmitEditing={saveField}
+                onBlur={saveField}
+                autoFocus
               />
             ) : (
-              <Text style={{ fontSize: 18, fontWeight: '600' }}>
-                {userStats[key as keyof typeof userStats]} {key === 'altura' ? 'cm' : 'Kg'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 18, fontWeight: '600', marginRight: 8 }}>
+                  {userStats[key as keyof typeof userStats]} {key === 'altura' ? 'cm' : 'Kg'}
+                </Text>
+                <TouchableOpacity onPress={() => startEditing(key, userStats[key as keyof typeof userStats])}>
+                  <Ionicons name="create-outline" size={20} color="#2f80ed" />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         ))}
@@ -270,46 +298,39 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         <Text style={{ fontSize: 20, fontWeight: '700', marginBottom: 12 }}>Metas Diárias</Text>
 
         {Object.entries(goals).map(([key, value]) => (
-          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 }}>
+          <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }}>
             <Text style={{ fontSize: 18 }}>{key}</Text>
 
-            {isEditing ? (
+            {editingField === key ? (
               <TextInput
-                style={{ borderBottomWidth: 1, width: 80, textAlign: 'right' }}
+                style={{ borderBottomWidth: 1, width: 80, textAlign: 'right', fontSize: 18, fontWeight: '600' }}
                 keyboardType="numeric"
-                value={String(editedGoals[key])}
-                onChangeText={v => setEditedGoals({ ...editedGoals, [key]: Number(v) })}
+                value={tempValue}
+                onChangeText={setTempValue}
+                onSubmitEditing={saveField}
+                onBlur={saveField}
+                autoFocus
               />
             ) : (
-              <Text style={{ fontSize: 18, fontWeight: '600' }}>
-                {value}{key === 'calorias' ? ' kcal' : ' g'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 18, fontWeight: '600', marginRight: 8 }}>
+                  {value}{key === 'calorias' ? ' kcal' : ' g'}
+                </Text>
+                <TouchableOpacity onPress={() => startEditing(key, value)}>
+                  <Ionicons name="create-outline" size={20} color="#2f80ed" />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         ))}
       </View>
 
-      {/* Salvar / Cancelar */}
-      {isEditing && (
-        <View style={{ marginHorizontal: 20, marginTop: 24 }}>
-          <TouchableOpacity onPress={saveChanges} style={{ backgroundColor: '#2ecc71', padding: 14, borderRadius: 12, marginBottom: 12 }}>
-            <Text style={{ textAlign: 'center', fontWeight: '700', color: '#fff' }}>Salvar Alterações</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={cancelEditing} style={{ backgroundColor: '#ccc', padding: 14, borderRadius: 12 }}>
-            <Text style={{ textAlign: 'center', fontWeight: '700' }}>Cancelar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Logout */}
-      {!isEditing && (
-        <View style={{ marginHorizontal: 20, marginTop: 24 }}>
-          <TouchableOpacity onPress={handleLogout} style={{ backgroundColor: '#86efac', padding: 14, borderRadius: 12 }}>
-            <Text style={{ textAlign: 'center', fontWeight: '700', color: '#166534' }}>Deslogar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={{ marginHorizontal: 20, marginTop: 24 }}>
+        <TouchableOpacity onPress={handleLogout} style={{ backgroundColor: '#86efac', padding: 14, borderRadius: 12 }}>
+          <Text style={{ textAlign: 'center', fontWeight: '700', color: '#166534' }}>Deslogar</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Emergência */}
       <TouchableOpacity

@@ -84,12 +84,6 @@ interface DailyNutrition {
   carbs: number;
   calories: number;
 }
-interface MonthlyNutrition {
-  month: string;
-  protein: number;
-  carbs: number;
-  calories: number;
-}
 
 const defaultGoals = {
   protein: 120,
@@ -204,133 +198,6 @@ const WeeklyChartsSection = ({ version, goals }: { version: number; goals: { pro
   }
 
   return <View style={{ marginTop: 8 }}>{buildChart('protein', '#3498db', 'Proteínas', 'g')}{buildChart('carbs', '#e74c3c', 'Carboidratos', 'g')}{buildChart('calories', '#f39c12', 'Calorias', 'kcal')}</View>;
-};
-
-const MonthlyChartsSection = ({ version, foods }: { version: number; foods: FoodItem[] }) => {
-  const [monthlyData, setMonthlyData] = useState<MonthlyNutrition[]>([]);
-  const [goals, setGoals] = useState(defaultGoals);
-  const [selectedPeriod, setSelectedPeriod] = useState('6m');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const storedGoals = await AsyncStorage.getItem('userGoals');
-        if (storedGoals) {
-          const userGoals = JSON.parse(storedGoals);
-          setGoals({
-            protein: userGoals.proteina || defaultGoals.protein,
-            carbs: userGoals.carboidratos || defaultGoals.carbs,
-            calories: userGoals.calorias || defaultGoals.calories
-          });
-        }
-
-        const keys = await AsyncStorage.getAllKeys();
-        const mealKeys = keys.filter(key => key.startsWith('meals_'));
-        const monthlyDataMap: Record<string, { protein: number; carbs: number; calories: number; days: number }> = {};
-
-        for (const key of mealKeys) {
-          const raw = await AsyncStorage.getItem(key);
-          if (!raw) continue;
-          const meals = JSON.parse(raw) as Record<string, SavedMealItem[]>;
-          const dateStr = key.replace('meals_', '');
-          const [year, month] = dateStr.split('-');
-          const monthKey = `${year}-${month}`;
-          let dayProtein = 0, dayCarbs = 0, dayCalories = 0;
-
-          Object.values(meals).forEach(items => {
-            items.forEach(it => {
-              const food = foods.find(f => f.id === it.id);
-              if (food) {
-                const qty = it.qty ?? 1;
-                dayProtein += (food.protein ?? 0) * qty;
-                dayCarbs += (food.carbs ?? 0) * qty;
-                dayCalories += (food.cal ?? 0) * qty;
-              }
-            });
-          });
-
-          if (!monthlyDataMap[monthKey]) monthlyDataMap[monthKey] = { protein: 0, carbs: 0, calories: 0, days: 0 };
-          monthlyDataMap[monthKey].protein += dayProtein;
-          monthlyDataMap[monthKey].carbs += dayCarbs;
-          monthlyDataMap[monthKey].calories += dayCalories;
-          monthlyDataMap[monthKey].days += 1;
-        }
-
-        const result: MonthlyNutrition[] = Object.entries(monthlyDataMap)
-          .map(([month, data]) => ({ month, protein: data.days ? Math.round(data.protein / data.days) : 0, carbs: data.days ? Math.round(data.carbs / data.days) : 0, calories: data.days ? Math.round(data.calories / data.days) : 0 }))
-          .sort((a, b) => a.month.localeCompare(b.month))
-          .slice(-6);
-
-        setMonthlyData(result);
-      } catch (err) {
-        console.warn('Erro carregando dados mensais:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [version, foods]);
-
-  const filteredData = monthlyData.slice(-parseInt(selectedPeriod));
-
-  const MonthlyChart = ({ nutrient, color, label, unit }: { nutrient: 'protein' | 'carbs' | 'calories'; color: string; label: string; unit: string }) => {
-    if (loading) {
-      return (
-        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12 }}>{label} - Mensal</Text>
-          <Text>Carregando dados...</Text>
-        </View>
-      );
-    }
-
-    if (filteredData.length === 0) {
-      return (
-        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' }}>
-          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12 }}>{label} - Mensal</Text>
-          <Text style={{ color: '#666' }}>Nenhum dado histórico encontrado</Text>
-          <Text style={{ color: '#666', fontSize: 12, marginTop: 8 }}>Adicione refeições para ver o histórico</Text>
-        </View>
-      );
-    }
-
-    const labels = filteredData.map(item => {
-      const [year, month] = item.month.split('-');
-      return `${month}/${year.slice(2)}`;
-    });
-
-    const data = filteredData.map(item => item[nutrient]);
-    const goal = goals[nutrient];
-    const maxValue = Math.max(...data, goal) * 1.1;
-    const chartHeight = 200;
-    const goalPosition = chartHeight - (goal / maxValue) * chartHeight;
-
-    return (
-      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Text style={{ fontSize: 16, fontWeight: '600' }}>{label} - Mensal</Text>
-          <View style={{ flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 8 }}>
-            {['6m', '3m', '1m'].map(period => (
-              <TouchableOpacity key={period} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: selectedPeriod === period ? '#3498db' : 'transparent', borderRadius: 6 }} onPress={() => setSelectedPeriod(period)}>
-                <Text style={{ color: selectedPeriod === period ? '#fff' : '#666', fontSize: 12 }}>{period}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={{ height: chartHeight }}>
-          <LineChart data={{ labels, datasets: [{ data: data.length > 0 ? data : [0], color: () => color, strokeWidth: 3 }] }} width={Dimensions.get('window').width - 72} height={chartHeight} chartConfig={{ backgroundColor: '#ffffff', backgroundGradientFrom: '#ffffff', backgroundGradientTo: '#ffffff', decimalPlaces: 0, color: (opacity = 1) => color, labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`, style: { borderRadius: 16 }, propsForDots: { r: '5', strokeWidth: '2', stroke: color } }} bezier style={{ borderRadius: 16 }} withVerticalLines={false} withHorizontalLines={true} fromZero />
-          <View style={{ position: 'absolute', left: 0, right: 0, top: goalPosition, borderTopWidth: 2, borderTopColor: '#666', borderStyle: 'dashed' }} />
-          <View style={{ position: 'absolute', right: 8, top: goalPosition - 10, backgroundColor: '#fff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#ddd' }}>
-            <Text style={{ fontSize: 10, color: '#666', fontWeight: '600' }}>Meta: {goal}{unit}</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  return (<View><MonthlyChart nutrient="protein" color="#3498db" label="Proteínas" unit="g" /><MonthlyChart nutrient="carbs" color="#e74c3c" label="Carboidratos" unit="g" /><MonthlyChart nutrient="calories" color="#f39c12" label="Calorias" unit="kcal" /></View>);
 };
 
 function HomeScreen({ navigation, route, foods }: { navigation: any; route: any; foods: FoodItem[] }) {
@@ -495,7 +362,6 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
 
         {/* Charts */}
         <WeeklyChartsSection version={chartsVersion} goals={goals} />
-        <MonthlyChartsSection version={chartsVersion} foods={foods} />
 
         <TouchableOpacity style={{ marginTop: 20, backgroundColor: '#e74c3c', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }} onPress={handleResetMeals}>
           <Text style={{ color: '#fff', fontWeight: '600' }}>Resetar alimentos (teste)</Text>

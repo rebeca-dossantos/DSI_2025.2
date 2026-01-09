@@ -8,6 +8,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import MapScreen from './Map';
 import ProfileScreen from './Profile';
+import FormularioDiagnostico from './Diagnostico';
 import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { supabase } from './supabase';
@@ -654,6 +655,7 @@ export default function Home(): JSX.Element {
           let icon = 'home';
           if (route.name === 'Mapa') icon = 'map';
           if (route.name === 'Perfil') icon = 'person';
+          if (route.name === 'Diagnóstico') icon = 'medical';
           return <Ionicons name={icon as any} size={size} color={color} />;
         },
       })}
@@ -661,6 +663,7 @@ export default function Home(): JSX.Element {
       <Tab.Screen name="Home">
         {() => <HomeStack foods={foods} setFoods={setFoods} />}
       </Tab.Screen>
+      <Tab.Screen name="Diagnóstico" component={FormularioDiagnostico} />
       <Tab.Screen name="Mapa" component={MapScreen} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>

@@ -89,7 +89,8 @@ interface DailyNutrition {
 const defaultGoals = {
   protein: 120,
   carbs: 220,
-  calories: 1800
+  calories: 1800,
+  agua: 2500
 };
 
 const DAILY_NUTRI_PREFIX = 'nutri_';
@@ -200,6 +201,67 @@ const WeeklyChartsSection = ({ version, goals }: { version: number; goals: { pro
 
   return <View style={{ marginTop: 8 }}>{buildChart('protein', '#3498db', 'Proteínas', 'g')}{buildChart('carbs', '#e74c3c', 'Carboidratos', 'g')}{buildChart('calories', '#f39c12', 'Calorias', 'kcal')}</View>;
 };
+// Componente Visual de Hidratação
+function HydrationSection({ goal }: { goal: number }) { 
+  const [currentWater, setCurrentWater] = useState(0);
+  // const waterGoal = 2500;  <--- APAGUE OU COMENTE ESSA LINHA FIXA
+  const cupSize = 250;
+
+  const handleAdd = () => setCurrentWater(prev => prev + cupSize);
+  const handleRemove = () => setCurrentWater(prev => Math.max(0, prev - cupSize));
+
+  // Use a prop "goal" aqui no lugar de "waterGoal"
+  const percentage = Math.min(100, Math.round((currentWater / goal) * 100));
+  return (
+    <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginTop: 24 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>Hidratação Diária</Text>
+        {/* Use a prop goal aqui */}
+        <Text style={{ fontSize: 13, color: '#666' }}>Meta: {goal}ml</Text>
+      </View>
+
+      {/* Controles Principais */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }}>
+        
+        {/* Botão Menos */}
+        <TouchableOpacity 
+          onPress={handleRemove}
+          style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Ionicons name="remove" size={24} color="#64748b" />
+        </TouchableOpacity>
+
+        {/* Ícone Central e Valor */}
+        <View style={{ alignItems: 'center' }}>
+          <View style={{ marginBottom: 8 }}>
+            {/* Muda o ícone se bater a meta */}
+            <Ionicons 
+              name={percentage >= 100 ? "water" : "water-outline"} 
+              size={56} 
+              color="#3b82f6" 
+            />
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: '700', color: '#3b82f6' }}>
+            {currentWater}<Text style={{ fontSize: 16, color: '#64748b' }}>ml</Text>
+          </Text>
+        </View>
+
+        {/* Botão Mais */}
+        <TouchableOpacity 
+          onPress={handleAdd}
+          style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#bfdbfe' }}
+        >
+          <Ionicons name="add" size={24} color="#3b82f6" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Barra de Progresso Simples */}
+      <View style={{ height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, marginTop: 20, overflow: 'hidden' }}>
+        <View style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#3b82f6' }} />
+      </View>
+    </View>
+  );
+}
 
 function HomeScreen({ navigation, route, foods }: { navigation: any; route: any; foods: FoodItem[] }) {
   const userEmail = route?.params?.userEmail ?? 'Usuário';
@@ -250,6 +312,22 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
       const data = await loadMealsForToday();
       setMeals(data);
       await computeTotals(data);
+      try {
+        const storedGoals = await AsyncStorage.getItem('userGoals');
+        if (storedGoals) {
+          const parsed = JSON.parse(storedGoals);
+          
+          // AQUI ESTÁ A CORREÇÃO:
+          // Mapeamos os nomes em português (do Perfil) para inglês (da Home)
+          setGoals(prev => ({
+            ...prev,
+            calories: parsed.calorias ?? prev.calories,
+            protein: parsed.proteina ?? prev.protein,
+            carbs: parsed.carboidratos ?? prev.carbs,
+            agua: parsed.agua ?? prev.agua // Água é igual nos dois
+          }));
+        }
+      } catch (e) { console.warn(e); }
       const week = await loadWeeklyNutrition();
       setWeeklyData(week);
       refreshCharts();
@@ -360,6 +438,9 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Hidratação*/}
+        <HydrationSection goal={(goals as any).agua || 2500} />
 
         {/* Charts */}
         <WeeklyChartsSection version={chartsVersion} goals={goals} />

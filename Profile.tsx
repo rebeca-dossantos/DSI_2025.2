@@ -28,6 +28,7 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
     proteina: 120,
     carboidratos: 220,
     gordura: 60,
+    agua: 2400,
   });
 
   function getFileExtFromName(name: string) {
@@ -139,6 +140,7 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
     } else if (editingField in goals) {
       const newGoals = { ...goals, [editingField]: Number(tempValue) };
       setGoals(newGoals);
+      await AsyncStorage.setItem('userGoals', JSON.stringify(newGoals));
     }
 
     setEditingField(null);
@@ -170,6 +172,10 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
           await AsyncStorage.setItem('daysUsed', String(days));
         }
         setUserStats(prev => ({ ...prev, dias: days }));
+        const storedGoals = await AsyncStorage.getItem('userGoals');
+        if (storedGoals) {
+          setGoals(prev => ({ ...prev, ...JSON.parse(storedGoals) }));
+        }
       } catch {}
     };
 

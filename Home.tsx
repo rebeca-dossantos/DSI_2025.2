@@ -342,9 +342,24 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
   const refreshCharts = () => setChartsVersion(prev => prev + 1);
 
   // --- FAVORITES CRUD (Supabase) ---
+  // inside HomeScreen (substituir loadFavorites)
   const loadFavorites = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('favorites').select('food_id');
+    // get user (supabase-js v2)
+      let userId: string | null = null;
+      try {
+        const maybeUser = await supabase.auth.getUser();
+        userId = maybeUser?.data?.user?.id ?? null;
+      } catch (e) {
+      // fallback para clientes antigos
+      // @ts-ignore
+        userId = supabase.auth?.user?.id ?? null;
+      }
+
+      let query = supabase.from('favorites').select('food_id');
+      if (userId) query = query.eq('user_id', userId); // filtra por usuário quando aplicável
+      const { data, error } = await query;
+
       if (error) {
         console.warn('Erro carregando favoritos:', error);
         return;
@@ -355,6 +370,7 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
       console.warn('Falha ao carregar favoritos:', err);
     }
   }, []);
+
 
   const toggleFavorite = useCallback(async (foodId: number) => {
     const isFav = favoriteIds.has(foodId);
@@ -560,20 +576,50 @@ export function AddFoodScreen({ navigation, route, foods }: { navigation: any; r
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [favoriteIdsLocal, setFavoriteIdsLocal] = useState<Set<number>>(new Set());
 
+  // no topo do AddFoodScreen component
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const load = async () => {
       try {
-        const { data, error } = await supabase.from('favorites').select('food_id');
-        if (!error && data && mounted) {
-          const ids = (data || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
-          setFavoriteIdsLocal(new Set(ids));
+        // obter user id se houver
+        let userId: string | null = null;
+        try {
+          const maybeUser = await supabase.auth.getUser();
+          userId = maybeUser?.data?.user?.id ?? null;
+        } catch (e) {
+          // fallback
+          // @ts-ignore
+          userId = supabase.auth?.user?.id ?? null;
         }
+
+        let q = supabase.from('favorites').select('food_id');
+        if (userId) q = q.eq('user_id', userId);
+        const { data, error } = await q;
+        if (error) {
+          console.warn('Erro carregando favoritos (AddFood):', error);
+          return;
+        }
+        if (!mounted) return;
+        const ids = (data || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+        setFavoriteIdsLocal(new Set(ids));
       } catch (err) {
+        console.warn('Erro carregando favoritos (AddFood):', err);
       }
-    })();
-    return () => { mounted = false; };
-  }, []);
+    };
+
+  // load initially
+    load();
+
+  // reload quando a tela ganha foco (importante)
+    const unsub = navigation.addListener?.('focus', load);
+
+    return () => {
+      mounted = false;
+      if (unsub) unsub();
+    };
+  }, [navigation]);
+
 
   const inc = (id: number) => setSelected(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   const dec = (id: number) => setSelected(prev => {
@@ -608,28 +654,52 @@ export function AddFoodScreen({ navigation, route, foods }: { navigation: any; r
   const filteredFoods = (favoriteOnly ? foods.filter(f => favoriteIdsLocal.has(f.id)) : foods).filter((f) => f.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   const toggleFavoriteLocal = async (foodId: number) => {
+    // pega userId se necessário
+    let userId: string | null = null;
+    try {
+      const maybeUser = await supabase.auth.getUser();
+      userId = maybeUser?.data?.user?.id ?? null;
+    } catch (e) {
+      // @ts-ignore
+      userId = supabase.auth?.user?.id ?? null;
+    }
+
     const isFav = favoriteIdsLocal.has(foodId);
     try {
       if (isFav) {
-        await supabase.from('favorites').delete().match({ food_id: foodId });
-        setFavoriteIdsLocal(prev => {
-          const s = new Set(prev);
-          s.delete(foodId);
-          return s;
-        });
+        // delete - inclua user_id se aplicável
+        let q = supabase.from('favorites').delete();
+        if (userId) q = q.match({ food_id: foodId, user_id: userId });
+        else q = q.match({ food_id: foodId });
+        const { error } = await q;
+        if (error) throw error;
+
+        // recarrega do servidor para garantir consistência
+        const reloadQuery = userId ? supabase.from('favorites').select('food_id').eq('user_id', userId) : supabase.from('favorites').select('food_id');
+        const { data } = await reloadQuery;
+        const ids = (data || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+        setFavoriteIdsLocal(new Set(ids));
+        Toast.show({ type: 'success', text1: 'Removido dos favoritos' });
       } else {
-        await supabase.from('favorites').insert([{ food_id: foodId }]);
-        setFavoriteIdsLocal(prev => {
-          const s = new Set(prev);
-          s.add(foodId);
-          return s;
-        });
+        // insert - inclua user_id se aplicável
+        const payload: any = { food_id: foodId };
+        if (userId) payload.user_id = userId;
+        const { data, error } = await supabase.from('favorites').insert([payload]).select().limit(1);
+        if (error) throw error;
+
+        // recarrega do servidor para garantir consistência
+        const reloadQuery = userId ? supabase.from('favorites').select('food_id').eq('user_id', userId) : supabase.from('favorites').select('food_id');
+        const { data: after } = await reloadQuery;
+        const ids = (after || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+        setFavoriteIdsLocal(new Set(ids));
+        Toast.show({ type: 'success', text1: 'Adicionado aos favoritos' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Erro toggleFavoriteLocal', err);
-      Toast.show({ type: 'error', text1: 'Erro ao atualizar favorito' });
+      Toast.show({ type: 'error', text1: 'Erro ao atualizar favorito', text2: String(err.message ?? err) });
     }
   };
+
 
   const renderItem = ({ item }: { item: FoodItem }) => {
     const qty = selected[item.id] ?? 0;

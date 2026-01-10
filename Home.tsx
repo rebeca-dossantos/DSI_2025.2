@@ -332,11 +332,12 @@ const MonthlyChartsSection = ({ version, foods }: { version: number; foods: Food
         const storedGoals = await AsyncStorage.getItem('userGoals');
         if (storedGoals) {
           const userGoals = JSON.parse(storedGoals);
-          setGoals({
-            protein: userGoals.proteina || defaultGoals.protein,
-            carbs: userGoals.carboidratos || defaultGoals.carbs,
-            calories: userGoals.calorias || defaultGoals.calories
-          });
+          setGoals(prev => ({
+  ...prev,
+  protein: userGoals.proteina || defaultGoals.protein,
+  carbs: userGoals.carboidratos || defaultGoals.carbs,
+  calories: userGoals.calorias || defaultGoals.calories
+}));
         }
 
         // generate monthly data using current foods

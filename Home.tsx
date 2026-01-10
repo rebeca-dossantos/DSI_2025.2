@@ -201,40 +201,98 @@ const WeeklyChartsSection = ({ version, goals }: { version: number; goals: { pro
 
   return <View style={{ marginTop: 8 }}>{buildChart('protein', '#3498db', 'Proteínas', 'g')}{buildChart('carbs', '#e74c3c', 'Carboidratos', 'g')}{buildChart('calories', '#f39c12', 'Calorias', 'kcal')}</View>;
 };
-// Componente Visual de Hidratação
-function HydrationSection({ goal }: { goal: number }) { 
+
+function HydrationSection({ goal }: { goal: number }) {
   const [currentWater, setCurrentWater] = useState(0);
-  // const waterGoal = 2500;  <--- APAGUE OU COMENTE ESSA LINHA FIXA
   const cupSize = 250;
+  
+  // Pega a data de hoje no formato YYYY-MM-DD
+  const getTodayDateStr = () => new Date().toISOString().split('T')[0];
 
-  const handleAdd = () => setCurrentWater(prev => prev + cupSize);
-  const handleRemove = () => setCurrentWater(prev => Math.max(0, prev - cupSize));
+  // 1. CARREGAR DO SUPABASE AO ABRIR
+  useEffect(() => {
+    const loadWater = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-  // Use a prop "goal" aqui no lugar de "waterGoal"
-  const percentage = Math.min(100, Math.round((currentWater / goal) * 100));
+        const today = getTodayDateStr();
+
+        // Busca se já tem registro hoje
+        const { data, error } = await supabase
+          .from('hydration_logs')
+          .select('amount_ml')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle(); // maybeSingle evita erro se não existir nada ainda
+
+        if (data) {
+          setCurrentWater(data.amount_ml);
+        }
+      } catch (error) {
+        console.log('Erro ao carregar água:', error);
+      }
+    };
+
+    loadWater();
+  }, []);
+
+  // 2. SALVAR NO SUPABASE (UPSERT)
+  const updateWater = async (newValue: number) => {
+    // Atualiza a tela IMEDIATAMENTE (UI Otimista) para não travar
+    const finalValue = Math.max(0, newValue);
+    setCurrentWater(finalValue);
+    
+    // Salva no banco em segundo plano
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const today = getTodayDateStr();
+
+      const { error } = await supabase
+        .from('hydration_logs')
+        .upsert(
+          { 
+            user_id: user.id, 
+            date: today, 
+            amount_ml: finalValue 
+          },
+          { onConflict: 'user_id, date' }
+        );
+
+      if (error) console.log("Erro Supabase:", error);
+      
+    } catch (e) {
+      console.warn("Erro de conexão:", e);
+    }
+  };
+
+  const handleAdd = () => updateWater(currentWater + cupSize);
+  const handleRemove = () => updateWater(currentWater - cupSize);
+
+  // Calcula porcentagem (protege contra divisão por zero)
+  const safeGoal = goal > 0 ? goal : 2500;
+  const percentage = Math.min(100, Math.round((currentWater / safeGoal) * 100));
+
   return (
     <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginTop: 24 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>Hidratação Diária</Text>
-        {/* Use a prop goal aqui */}
-        <Text style={{ fontSize: 13, color: '#666' }}>Meta: {goal}ml</Text>
+        <Text style={{ fontSize: 13, color: '#666' }}>Meta: {safeGoal}ml</Text>
       </View>
 
-      {/* Controles Principais */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }}>
-        
-        {/* Botão Menos */}
         <TouchableOpacity 
           onPress={handleRemove}
-          style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}
+          disabled={currentWater === 0}
+          style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', opacity: currentWater === 0 ? 0.5 : 1 }}
         >
           <Ionicons name="remove" size={24} color="#64748b" />
         </TouchableOpacity>
 
-        {/* Ícone Central e Valor */}
         <View style={{ alignItems: 'center' }}>
           <View style={{ marginBottom: 8 }}>
-            {/* Muda o ícone se bater a meta */}
             <Ionicons 
               name={percentage >= 100 ? "water" : "water-outline"} 
               size={56} 
@@ -246,7 +304,6 @@ function HydrationSection({ goal }: { goal: number }) {
           </Text>
         </View>
 
-        {/* Botão Mais */}
         <TouchableOpacity 
           onPress={handleAdd}
           style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#bfdbfe' }}
@@ -255,7 +312,6 @@ function HydrationSection({ goal }: { goal: number }) {
         </TouchableOpacity>
       </View>
 
-      {/* Barra de Progresso Simples */}
       <View style={{ height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, marginTop: 20, overflow: 'hidden' }}>
         <View style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#3b82f6' }} />
       </View>

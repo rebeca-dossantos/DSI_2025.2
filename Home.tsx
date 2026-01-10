@@ -202,7 +202,8 @@ const WeeklyChartsSection = ({ version, goals }: { version: number; goals: { pro
   return <View style={{ marginTop: 8 }}>{buildChart('protein', '#3498db', 'Proteínas', 'g')}{buildChart('carbs', '#e74c3c', 'Carboidratos', 'g')}{buildChart('calories', '#f39c12', 'Calorias', 'kcal')}</View>;
 };
 
-function HydrationSection({ goal }: { goal: number }) {
+function HydrationSection({ goal, onWaterChange }: { goal: number; onWaterChange?: () => void }) {
+  
   const [currentWater, setCurrentWater] = useState(0);
   const cupSize = 250;
   
@@ -242,7 +243,7 @@ function HydrationSection({ goal }: { goal: number }) {
     // Atualiza a tela IMEDIATAMENTE (UI Otimista) para não travar
     const finalValue = Math.max(0, newValue);
     setCurrentWater(finalValue);
-    
+    if (onWaterChange) onWaterChange();
     // Salva no banco em segundo plano
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -315,6 +316,131 @@ function HydrationSection({ goal }: { goal: number }) {
       <View style={{ height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, marginTop: 20, overflow: 'hidden' }}>
         <View style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#3b82f6' }} />
       </View>
+    </View>
+  );
+}
+
+// --- COMPONENTE DE GRÁFICO DE ÁGUA (VISUAL UNIFICADO) ---
+function WaterChartSection({goal, updateTrigger }: { goal: number; updateTrigger: number }) {
+  const [data, setData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [days, setDays] = useState<string[]>(['', '', '', '', '', '', '']);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchWaterHistory = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const datesToCheck = [];
+        const displayDays = [];
+        const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        
+        // Pega os últimos 7 dias
+        for (let i = 0; i < 7; i++) {
+           // Ajuste para pegar na ordem correta (igual ao gráfico de macros que começa na semana)
+           // Mas mantendo sua logica de historico:
+           const d = new Date();
+           d.setDate(d.getDate() - (6 - i)); // -6, -5, ... -0 (Hoje)
+           
+           const yyyy = d.getFullYear();
+           const mm = String(d.getMonth() + 1).padStart(2, '0');
+           const dd = String(d.getDate()).padStart(2, '0');
+           datesToCheck.push(`${yyyy}-${mm}-${dd}`);
+           
+           // Formato DD/MM igual ao do macro
+           displayDays.push(`${dd}/${mm}`);
+        }
+        setDays(displayDays);
+
+        const { data: logs } = await supabase
+          .from('hydration_logs')
+          .select('date, amount_ml')
+          .eq('user_id', user.id)
+          .gte('date', datesToCheck[0])
+          .lte('date', datesToCheck[6]);
+
+        const finalAmounts = datesToCheck.map(dateStr => {
+          const log = logs?.find(l => l.date === dateStr);
+          return log ? log.amount_ml : 0;
+        });
+
+        setData(finalAmounts);
+      } catch (e) {
+        console.log("Erro gráfico água", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWaterHistory();
+  }, [updateTrigger]);
+
+  const screenWidth = Dimensions.get('window').width;
+  const chartColor = '#3b82f6'; // Azul padrão
+
+  // Loading com o mesmo visual do outro
+  if (loading) {
+    return (
+      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 18 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Hidratação - Semana</Text>
+        <Text style={{ color: '#666' }}>Carregando...</Text>
+      </View>
+    );
+  }
+
+  // Calcula a média para exibir no rodapé igual aos macros
+  const average = data.length > 0 
+    ? Math.round((data.reduce((a, b) => a + b, 0) / data.length) * 10) / 10 
+    : 0;
+
+  return (
+    <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 18, marginBottom: 20 }}>
+      <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 6 }}>Hidratação - Semana</Text>
+      
+      <LineChart
+        data={{
+          labels: days,
+          datasets: [
+            {
+              data: data,
+              color: (opacity = 1) => chartColor,
+              strokeWidth: 3, 
+            },
+            {
+              // Linha de meta
+              data: data.map(() => goal > 0 ? goal : 2000), 
+              color: () => '#999', 
+              strokeWidth: 2, 
+              withDots: false,
+              strokeDash: [5, 5] 
+            } as any
+          ],
+          legend: ['Consumido', 'Meta'] // Adicionei legenda igual ao outro
+        }}
+        width={screenWidth - 64}
+        height={200} // Altura padronizada para 200
+        fromZero
+        yAxisSuffix="ml"
+        chartConfig={{
+          backgroundColor: '#ffffff',
+          backgroundGradientFrom: '#ffffff',
+          backgroundGradientTo: '#ffffff',
+          decimalPlaces: 0,
+          // Cores pretas nos eixos igual ao do macro
+          color: (opacity = 1) => `rgba(0,0,0,${opacity})`, 
+          labelColor: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+          style: { borderRadius: 16 },
+          // Bolinhas tamanho 5 igual ao do macro
+          propsForDots: { r: '5', strokeWidth: '2', stroke: chartColor } 
+        }}
+        bezier
+        style={{ borderRadius: 16, marginVertical: 8 }}
+      />
+      
+      <Text style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
+        Meta diária: {goal}ml • Média semana: {average}ml
+      </Text>
     </View>
   );
 }
@@ -448,6 +574,7 @@ const MonthlyChartsSection = ({ version, foods }: { version: number; foods: Food
   return (<View><MonthlyChart nutrient="protein" color="#3498db" label="Proteínas" unit="g" /><MonthlyChart nutrient="carbs" color="#e74c3c" label="Carboidratos" unit="g" /><MonthlyChart nutrient="calories" color="#f39c12" label="Calorias" unit="kcal" /></View>);
 };
 
+
 function HomeScreen({ navigation, route, foods }: { navigation: any; route: any; foods: FoodItem[] }) {
   const userEmail = route?.params?.userEmail ?? 'Usuário';
   const [meals, setMeals] = useState<Record<string, SavedMealItem[]>>({});
@@ -458,6 +585,7 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
   const [chartsVersion, setChartsVersion] = useState(0);
   const [weeklyData, setWeeklyData] = useState<DailyNutrition[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [waterTrigger, setWaterTrigger] = useState(0);
 
   const refreshCharts = () => setChartsVersion(prev => prev + 1);
 
@@ -561,9 +689,6 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
         const storedGoals = await AsyncStorage.getItem('userGoals');
         if (storedGoals) {
           const parsed = JSON.parse(storedGoals);
-          
-          // AQUI ESTÁ A CORREÇÃO:
-          // Mapeamos os nomes em português (do Perfil) para inglês (da Home)
           setGoals(prev => ({
             ...prev,
             calories: parsed.calorias ?? prev.calories,
@@ -694,10 +819,14 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
         </View>
 
         {/* Hidratação*/}
-        <HydrationSection goal={(goals as any).agua || 2500} />
+        <HydrationSection goal={(goals as any).agua || 2500} 
+        onWaterChange={() => setWaterTrigger(t => t + 1)}/>
 
         {/* Charts */}
         <WeeklyChartsSection version={chartsVersion} goals={goals} />
+
+        <WaterChartSection goal={goals.agua || 2500} 
+        updateTrigger={waterTrigger}/>
 
         <TouchableOpacity style={{ marginTop: 20, backgroundColor: '#e74c3c', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }} onPress={handleResetMeals}>
           <Text style={{ color: '#fff', fontWeight: '600' }}>Resetar alimentos (teste)</Text>

@@ -12,6 +12,7 @@ import FormularioDiagnostico from './Diagnostico';
 import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { supabase } from './supabase';
+import FavoritePlaces from './FavoritePlaces';
 
 export type SavedMealItem = { id: number; name: string; qty: number; };
 
@@ -1177,6 +1178,28 @@ function HomeStack({ foods, setFoods }: { foods: FoodItem[]; setFoods: React.Dis
   );
 }
 
+function MapStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="MapMain"
+        component={MapScreen}
+        options={{ headerShown: false }}
+      />
+
+      <Stack.Screen
+        name="FavoritePlaces"
+        component={FavoritePlaces}
+        options={{
+          title: 'Favoritos',
+          headerTintColor: '#000',
+          headerStyle: { backgroundColor: '#fff' },
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 const Tab = createBottomTabNavigator();
 
 export default function Home(): JSX.Element {
@@ -1242,7 +1265,7 @@ export default function Home(): JSX.Element {
         {() => <HomeStack foods={foods} setFoods={setFoods} />}
       </Tab.Screen>
       <Tab.Screen name="Diagnóstico" component={FormularioDiagnostico} />
-      <Tab.Screen name="Mapa" component={MapScreen} />
+      <Tab.Screen name="Mapa" component={MapStack} />
       <Tab.Screen name="Perfil" component={ProfileScreen} />
     </Tab.Navigator>
   );

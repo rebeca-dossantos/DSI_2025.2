@@ -1,5 +1,5 @@
 // Home.tsx
-import React, { JSX, useEffect, useState } from 'react';
+import React, { JSX, useEffect, useState, useCallback } from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, Alert, ScrollView, FlatList, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
@@ -202,40 +202,99 @@ const WeeklyChartsSection = ({ version, goals }: { version: number; goals: { pro
 
   return <View style={{ marginTop: 8 }}>{buildChart('protein', '#3498db', 'Proteínas', 'g')}{buildChart('carbs', '#e74c3c', 'Carboidratos', 'g')}{buildChart('calories', '#f39c12', 'Calorias', 'kcal')}</View>;
 };
-// Componente Visual de Hidratação
-function HydrationSection({ goal }: { goal: number }) { 
+
+function HydrationSection({ goal, onWaterChange }: { goal: number; onWaterChange?: () => void }) {
+  
   const [currentWater, setCurrentWater] = useState(0);
-  // const waterGoal = 2500;  <--- APAGUE OU COMENTE ESSA LINHA FIXA
   const cupSize = 250;
+  
+  // Pega a data de hoje no formato YYYY-MM-DD
+  const getTodayDateStr = () => new Date().toISOString().split('T')[0];
 
-  const handleAdd = () => setCurrentWater(prev => prev + cupSize);
-  const handleRemove = () => setCurrentWater(prev => Math.max(0, prev - cupSize));
+  // 1. CARREGAR DO SUPABASE AO ABRIR
+  useEffect(() => {
+    const loadWater = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-  // Use a prop "goal" aqui no lugar de "waterGoal"
-  const percentage = Math.min(100, Math.round((currentWater / goal) * 100));
+        const today = getTodayDateStr();
+
+        // Busca se já tem registro hoje
+        const { data, error } = await supabase
+          .from('hydration_logs')
+          .select('amount_ml')
+          .eq('user_id', user.id)
+          .eq('date', today)
+          .maybeSingle(); // maybeSingle evita erro se não existir nada ainda
+
+        if (data) {
+          setCurrentWater(data.amount_ml);
+        }
+      } catch (error) {
+        console.log('Erro ao carregar água:', error);
+      }
+    };
+
+    loadWater();
+  }, []);
+
+  // 2. SALVAR NO SUPABASE (UPSERT)
+  const updateWater = async (newValue: number) => {
+    // Atualiza a tela IMEDIATAMENTE (UI Otimista) para não travar
+    const finalValue = Math.max(0, newValue);
+    setCurrentWater(finalValue);
+    if (onWaterChange) onWaterChange();
+    // Salva no banco em segundo plano
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const today = getTodayDateStr();
+
+      const { error } = await supabase
+        .from('hydration_logs')
+        .upsert(
+          { 
+            user_id: user.id, 
+            date: today, 
+            amount_ml: finalValue 
+          },
+          { onConflict: 'user_id, date' }
+        );
+
+      if (error) console.log("Erro Supabase:", error);
+      
+    } catch (e) {
+      console.warn("Erro de conexão:", e);
+    }
+  };
+
+  const handleAdd = () => updateWater(currentWater + cupSize);
+  const handleRemove = () => updateWater(currentWater - cupSize);
+
+  // Calcula porcentagem (protege contra divisão por zero)
+  const safeGoal = goal > 0 ? goal : 2500;
+  const percentage = Math.min(100, Math.round((currentWater / safeGoal) * 100));
+
   return (
     <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 16, marginTop: 24 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>Hidratação Diária</Text>
-        {/* Use a prop goal aqui */}
-        <Text style={{ fontSize: 13, color: '#666' }}>Meta: {goal}ml</Text>
+        <Text style={{ fontSize: 13, color: '#666' }}>Meta: {safeGoal}ml</Text>
       </View>
 
-      {/* Controles Principais */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' }}>
-        
-        {/* Botão Menos */}
         <TouchableOpacity 
           onPress={handleRemove}
-          style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}
+          disabled={currentWater === 0}
+          style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', opacity: currentWater === 0 ? 0.5 : 1 }}
         >
           <Ionicons name="remove" size={24} color="#64748b" />
         </TouchableOpacity>
 
-        {/* Ícone Central e Valor */}
         <View style={{ alignItems: 'center' }}>
           <View style={{ marginBottom: 8 }}>
-            {/* Muda o ícone se bater a meta */}
             <Ionicons 
               name={percentage >= 100 ? "water" : "water-outline"} 
               size={56} 
@@ -247,7 +306,6 @@ function HydrationSection({ goal }: { goal: number }) {
           </Text>
         </View>
 
-        {/* Botão Mais */}
         <TouchableOpacity 
           onPress={handleAdd}
           style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#bfdbfe' }}
@@ -256,13 +314,267 @@ function HydrationSection({ goal }: { goal: number }) {
         </TouchableOpacity>
       </View>
 
-      {/* Barra de Progresso Simples */}
       <View style={{ height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, marginTop: 20, overflow: 'hidden' }}>
         <View style={{ width: `${percentage}%`, height: '100%', backgroundColor: '#3b82f6' }} />
       </View>
     </View>
   );
 }
+
+// --- COMPONENTE DE GRÁFICO DE ÁGUA (VISUAL UNIFICADO) ---
+function WaterChartSection({goal, updateTrigger }: { goal: number; updateTrigger: number }) {
+  const [data, setData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [days, setDays] = useState<string[]>(['', '', '', '', '', '', '']);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchWaterHistory = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const datesToCheck = [];
+        const displayDays = [];
+        const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        
+        // Pega os últimos 7 dias
+        for (let i = 0; i < 7; i++) {
+           // Ajuste para pegar na ordem correta (igual ao gráfico de macros que começa na semana)
+           // Mas mantendo sua logica de historico:
+           const d = new Date();
+           d.setDate(d.getDate() - (6 - i)); // -6, -5, ... -0 (Hoje)
+           
+           const yyyy = d.getFullYear();
+           const mm = String(d.getMonth() + 1).padStart(2, '0');
+           const dd = String(d.getDate()).padStart(2, '0');
+           datesToCheck.push(`${yyyy}-${mm}-${dd}`);
+           
+           // Formato DD/MM igual ao do macro
+           displayDays.push(`${dd}/${mm}`);
+        }
+        setDays(displayDays);
+
+        const { data: logs } = await supabase
+          .from('hydration_logs')
+          .select('date, amount_ml')
+          .eq('user_id', user.id)
+          .gte('date', datesToCheck[0])
+          .lte('date', datesToCheck[6]);
+
+        const finalAmounts = datesToCheck.map(dateStr => {
+          const log = logs?.find(l => l.date === dateStr);
+          return log ? log.amount_ml : 0;
+        });
+
+        setData(finalAmounts);
+      } catch (e) {
+        console.log("Erro gráfico água", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWaterHistory();
+  }, [updateTrigger]);
+
+  const screenWidth = Dimensions.get('window').width;
+  const chartColor = '#3b82f6'; // Azul padrão
+
+  // Loading com o mesmo visual do outro
+  if (loading) {
+    return (
+      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 18 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>Hidratação - Semana</Text>
+        <Text style={{ color: '#666' }}>Carregando...</Text>
+      </View>
+    );
+  }
+
+  // Calcula a média para exibir no rodapé igual aos macros
+  const average = data.length > 0 
+    ? Math.round((data.reduce((a, b) => a + b, 0) / data.length) * 10) / 10 
+    : 0;
+
+  return (
+    <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 18, marginBottom: 20 }}>
+      <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 6 }}>Hidratação - Semana</Text>
+      
+      <LineChart
+        data={{
+          labels: days,
+          datasets: [
+            {
+              data: data,
+              color: (opacity = 1) => chartColor,
+              strokeWidth: 3, 
+            },
+            {
+              // Linha de meta
+              data: data.map(() => goal > 0 ? goal : 2000), 
+              color: () => '#999', 
+              strokeWidth: 2, 
+              withDots: false,
+              strokeDash: [5, 5] 
+            } as any
+          ],
+          legend: ['Consumido', 'Meta'] // Adicionei legenda igual ao outro
+        }}
+        width={screenWidth - 64}
+        height={200} // Altura padronizada para 200
+        fromZero
+        yAxisSuffix="ml"
+        chartConfig={{
+          backgroundColor: '#ffffff',
+          backgroundGradientFrom: '#ffffff',
+          backgroundGradientTo: '#ffffff',
+          decimalPlaces: 0,
+          // Cores pretas nos eixos igual ao do macro
+          color: (opacity = 1) => `rgba(0,0,0,${opacity})`, 
+          labelColor: (opacity = 1) => `rgba(0,0,0,${opacity})`,
+          style: { borderRadius: 16 },
+          // Bolinhas tamanho 5 igual ao do macro
+          propsForDots: { r: '5', strokeWidth: '2', stroke: chartColor } 
+        }}
+        bezier
+        style={{ borderRadius: 16, marginVertical: 8 }}
+      />
+      
+      <Text style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
+        Meta diária: {goal}ml • Média semana: {average}ml
+      </Text>
+    </View>
+  );
+}
+
+const MonthlyChartsSection = ({ version, foods }: { version: number; foods: FoodItem[] }) => {
+  const [monthlyData, setMonthlyData] = useState<{ month: string; protein: number; carbs: number; calories: number }[]>([]);
+  const [goals, setGoals] = useState(defaultGoals);
+  const [selectedPeriod, setSelectedPeriod] = useState('6m');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const storedGoals = await AsyncStorage.getItem('userGoals');
+        if (storedGoals) {
+          const userGoals = JSON.parse(storedGoals);
+          setGoals(prev => ({
+  ...prev,
+  protein: userGoals.proteina || defaultGoals.protein,
+  carbs: userGoals.carboidratos || defaultGoals.carbs,
+  calories: userGoals.calorias || defaultGoals.calories
+}));
+        }
+
+        // generate monthly data using current foods
+        const keys = await AsyncStorage.getAllKeys();
+        const mealKeys = keys.filter(key => key.startsWith('meals_'));
+        const monthlyDataMap: Record<string, { protein: number; carbs: number; calories: number; days: number }> = {};
+
+        for (const key of mealKeys) {
+          const raw = await AsyncStorage.getItem(key);
+          if (!raw) continue;
+          const meals = JSON.parse(raw) as Record<string, SavedMealItem[]>;
+          const dateStr = key.replace('meals_', '');
+          const [year, month] = dateStr.split('-');
+          const monthKey = `${year}-${month}`;
+          let dayProtein = 0, dayCarbs = 0, dayCalories = 0;
+
+          Object.values(meals).forEach(items => {
+            items.forEach(it => {
+              const food = foods.find(f => f.id === it.id);
+              if (food) {
+                const qty = it.qty ?? 1;
+                dayProtein += (food.protein ?? 0) * qty;
+                dayCarbs += (food.carbs ?? 0) * qty;
+                dayCalories += (food.cal ?? 0) * qty;
+              }
+            });
+          });
+
+          if (!monthlyDataMap[monthKey]) monthlyDataMap[monthKey] = { protein: 0, carbs: 0, calories: 0, days: 0 };
+          monthlyDataMap[monthKey].protein += dayProtein;
+          monthlyDataMap[monthKey].carbs += dayCarbs;
+          monthlyDataMap[monthKey].calories += dayCalories;
+          monthlyDataMap[monthKey].days += 1;
+        }
+
+        const result = Object.entries(monthlyDataMap)
+          .map(([month, data]) => ({ month, protein: data.days ? Math.round(data.protein / data.days) : 0, carbs: data.days ? Math.round(data.carbs / data.days) : 0, calories: data.days ? Math.round(data.calories / data.days) : 0 }))
+          .sort((a, b) => a.month.localeCompare(b.month))
+          .slice(-6);
+
+        setMonthlyData(result);
+      } catch (err) {
+        console.warn('Erro carregando dados mensais:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [version, foods]);
+
+  const filteredData = monthlyData.slice(-parseInt(selectedPeriod));
+
+  const MonthlyChart = ({ nutrient, color, label, unit }: { nutrient: 'protein' | 'carbs' | 'calories'; color: string; label: string; unit: string }) => {
+    if (loading) {
+      return (
+        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12 }}>{label} - Mensal</Text>
+          <Text>Carregando dados...</Text>
+        </View>
+      );
+    }
+
+    if (filteredData.length === 0) {
+      return (
+        <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20, alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12 }}>{label} - Mensal</Text>
+          <Text style={{ color: '#666' }}>Nenhum dado histórico encontrado</Text>
+          <Text style={{ color: '#666', fontSize: 12, marginTop: 8 }}>Adicione refeições para ver o histórico</Text>
+        </View>
+      );
+    }
+
+    const labels = filteredData.map(item => {
+      const [year, month] = item.month.split('-');
+      return `${month}/${year.slice(2)}`;
+    });
+
+    const data = filteredData.map(item => item[nutrient]);
+    const goal = goals[nutrient];
+    const maxValue = Math.max(...data, goal) * 1.1;
+    const chartHeight = 200;
+    const goalPosition = chartHeight - (goal / maxValue) * chartHeight;
+
+    return (
+      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 12, marginTop: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600' }}>{label} - Mensal</Text>
+          <View style={{ flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 8 }}>
+            {['6m', '3m', '1m'].map(period => (
+              <TouchableOpacity key={period} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: selectedPeriod === period ? '#3498db' : 'transparent', borderRadius: 6 }} onPress={() => setSelectedPeriod(period)}>
+                <Text style={{ color: selectedPeriod === period ? '#fff' : '#666', fontSize: 12 }}>{period}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={{ height: chartHeight }}>
+          <LineChart data={{ labels, datasets: [{ data: data.length > 0 ? data : [0], color: () => color, strokeWidth: 3 }] }} width={Dimensions.get('window').width - 72} height={chartHeight} chartConfig={{ backgroundColor: '#ffffff', backgroundGradientFrom: '#ffffff', backgroundGradientTo: '#ffffff', decimalPlaces: 0, color: (opacity = 1) => color, labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`, style: { borderRadius: 16 }, propsForDots: { r: '5', strokeWidth: '2', stroke: color } }} bezier style={{ borderRadius: 16 }} withVerticalLines={false} withHorizontalLines={true} fromZero />
+          <View style={{ position: 'absolute', left: 0, right: 0, top: goalPosition, borderTopWidth: 2, borderTopColor: '#666', borderStyle: 'dashed' }} />
+          <View style={{ position: 'absolute', right: 8, top: goalPosition - 10, backgroundColor: '#fff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#ddd' }}>
+            <Text style={{ fontSize: 10, color: '#666', fontWeight: '600' }}>Meta: {goal}{unit}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  return (<View><MonthlyChart nutrient="protein" color="#3498db" label="Proteínas" unit="g" /><MonthlyChart nutrient="carbs" color="#e74c3c" label="Carboidratos" unit="g" /><MonthlyChart nutrient="calories" color="#f39c12" label="Calorias" unit="kcal" /></View>);
+};
+
 
 function HomeScreen({ navigation, route, foods }: { navigation: any; route: any; foods: FoodItem[] }) {
   const userEmail = route?.params?.userEmail ?? 'Usuário';
@@ -273,8 +585,69 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
   const [goals, setGoals] = useState(defaultGoals);
   const [chartsVersion, setChartsVersion] = useState(0);
   const [weeklyData, setWeeklyData] = useState<DailyNutrition[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [waterTrigger, setWaterTrigger] = useState(0);
 
   const refreshCharts = () => setChartsVersion(prev => prev + 1);
+
+  // --- FAVORITES CRUD (Supabase) ---
+  // inside HomeScreen (substituir loadFavorites)
+  const loadFavorites = useCallback(async () => {
+    try {
+    // get user (supabase-js v2)
+      let userId: string | null = null;
+      try {
+        const maybeUser = await supabase.auth.getUser();
+        userId = maybeUser?.data?.user?.id ?? null;
+      } catch (e) {
+      // fallback para clientes antigos
+      // @ts-ignore
+        userId = supabase.auth?.user?.id ?? null;
+      }
+
+      let query = supabase.from('favorites').select('food_id');
+      if (userId) query = query.eq('user_id', userId); // filtra por usuário quando aplicável
+      const { data, error } = await query;
+
+      if (error) {
+        console.warn('Erro carregando favoritos:', error);
+        return;
+      }
+      const ids = (data || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+      setFavoriteIds(new Set(ids));
+    } catch (err) {
+      console.warn('Falha ao carregar favoritos:', err);
+    }
+  }, []);
+
+
+  const toggleFavorite = useCallback(async (foodId: number) => {
+    const isFav = favoriteIds.has(foodId);
+    try {
+      if (isFav) {
+        const { error } = await supabase.from('favorites').delete().match({ food_id: foodId });
+        if (error) throw error;
+        setFavoriteIds(prev => {
+          const s = new Set(prev);
+          s.delete(foodId);
+          return s;
+        });
+        Toast.show({ type: 'success', text1: 'Removido dos favoritos' });
+      } else {
+        const { data, error } = await supabase.from('favorites').insert([{ food_id: foodId }]).select().limit(1);
+        if (error) throw error;
+        setFavoriteIds(prev => {
+          const s = new Set(prev);
+          s.add(foodId);
+          return s;
+        });
+        Toast.show({ type: 'success', text1: 'Adicionado aos favoritos' });
+      }
+    } catch (err: any) {
+      console.warn('Erro toggleFavorite:', err);
+      Toast.show({ type: 'error', text1: 'Erro', text2: String(err.message ?? err) });
+    }
+  }, [favoriteIds]);
 
   useEffect(() => {
     const computeTotals = async (mealsSaved: Record<string, SavedMealItem[]>) => {
@@ -317,9 +690,6 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
         const storedGoals = await AsyncStorage.getItem('userGoals');
         if (storedGoals) {
           const parsed = JSON.parse(storedGoals);
-          
-          // AQUI ESTÁ A CORREÇÃO:
-          // Mapeamos os nomes em português (do Perfil) para inglês (da Home)
           setGoals(prev => ({
             ...prev,
             calories: parsed.calorias ?? prev.calories,
@@ -338,6 +708,15 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
     loadAndCompute();
     return unsub;
   }, [navigation, foods]);
+  useEffect(() => {
+    const mountedRef = { current: true };
+    (async () => {
+      if (mountedRef.current) {
+        await loadFavorites();
+      }
+    })();
+    return () => { mountedRef.current = false; };
+  }, [loadFavorites, foods]);
 
   function joinAndTruncate(names: string[], maxChars = 36) {
     const joined = names.join(' • ');
@@ -441,10 +820,14 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
         </View>
 
         {/* Hidratação*/}
-        <HydrationSection goal={(goals as any).agua || 2500} />
+        <HydrationSection goal={(goals as any).agua || 2500} 
+        onWaterChange={() => setWaterTrigger(t => t + 1)}/>
 
         {/* Charts */}
         <WeeklyChartsSection version={chartsVersion} goals={goals} />
+
+        <WaterChartSection goal={goals.agua || 2500} 
+        updateTrigger={waterTrigger}/>
 
         <TouchableOpacity style={{ marginTop: 20, backgroundColor: '#e74c3c', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }} onPress={handleResetMeals}>
           <Text style={{ color: '#fff', fontWeight: '600' }}>Resetar alimentos (teste)</Text>
@@ -454,10 +837,58 @@ function HomeScreen({ navigation, route, foods }: { navigation: any; route: any;
   );
 }
 
+// AddFoodScreen
 export function AddFoodScreen({ navigation, route, foods }: { navigation: any; route: any; foods: FoodItem[] }) {
   const meal = route?.params?.meal ?? 'Refeição';
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [query, setQuery] = useState<string>('');
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [favoriteIdsLocal, setFavoriteIdsLocal] = useState<Set<number>>(new Set());
+
+  // no topo do AddFoodScreen component
+  useEffect(() => {
+    let mounted = true;
+
+    const load = async () => {
+      try {
+        // obter user id se houver
+        let userId: string | null = null;
+        try {
+          const maybeUser = await supabase.auth.getUser();
+          userId = maybeUser?.data?.user?.id ?? null;
+        } catch (e) {
+          // fallback
+          // @ts-ignore
+          userId = supabase.auth?.user?.id ?? null;
+        }
+
+        let q = supabase.from('favorites').select('food_id');
+        if (userId) q = q.eq('user_id', userId);
+        const { data, error } = await q;
+        if (error) {
+          console.warn('Erro carregando favoritos (AddFood):', error);
+          return;
+        }
+        if (!mounted) return;
+        const ids = (data || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+        setFavoriteIdsLocal(new Set(ids));
+      } catch (err) {
+        console.warn('Erro carregando favoritos (AddFood):', err);
+      }
+    };
+
+  // load initially
+    load();
+
+  // reload quando a tela ganha foco (importante)
+    const unsub = navigation.addListener?.('focus', load);
+
+    return () => {
+      mounted = false;
+      if (unsub) unsub();
+    };
+  }, [navigation]);
+
 
   const inc = (id: number) => setSelected(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   const dec = (id: number) => setSelected(prev => {
@@ -489,16 +920,70 @@ export function AddFoodScreen({ navigation, route, foods }: { navigation: any; r
     navigation.goBack();
   };
 
-  const filteredFoods = foods.filter((f) => f.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const filteredFoods = (favoriteOnly ? foods.filter(f => favoriteIdsLocal.has(f.id)) : foods).filter((f) => f.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  const toggleFavoriteLocal = async (foodId: number) => {
+    // pega userId se necessário
+    let userId: string | null = null;
+    try {
+      const maybeUser = await supabase.auth.getUser();
+      userId = maybeUser?.data?.user?.id ?? null;
+    } catch (e) {
+      // @ts-ignore
+      userId = supabase.auth?.user?.id ?? null;
+    }
+
+    const isFav = favoriteIdsLocal.has(foodId);
+    try {
+      if (isFav) {
+        // delete - inclua user_id se aplicável
+        let q = supabase.from('favorites').delete();
+        if (userId) q = q.match({ food_id: foodId, user_id: userId });
+        else q = q.match({ food_id: foodId });
+        const { error } = await q;
+        if (error) throw error;
+
+        // recarrega do servidor para garantir consistência
+        const reloadQuery = userId ? supabase.from('favorites').select('food_id').eq('user_id', userId) : supabase.from('favorites').select('food_id');
+        const { data } = await reloadQuery;
+        const ids = (data || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+        setFavoriteIdsLocal(new Set(ids));
+        Toast.show({ type: 'success', text1: 'Removido dos favoritos' });
+      } else {
+        // insert - inclua user_id se aplicável
+        const payload: any = { food_id: foodId };
+        if (userId) payload.user_id = userId;
+        const { data, error } = await supabase.from('favorites').insert([payload]).select().limit(1);
+        if (error) throw error;
+
+        // recarrega do servidor para garantir consistência
+        const reloadQuery = userId ? supabase.from('favorites').select('food_id').eq('user_id', userId) : supabase.from('favorites').select('food_id');
+        const { data: after } = await reloadQuery;
+        const ids = (after || []).map((r: any) => Number(r.food_id)).filter((n: number) => !Number.isNaN(n));
+        setFavoriteIdsLocal(new Set(ids));
+        Toast.show({ type: 'success', text1: 'Adicionado aos favoritos' });
+      }
+    } catch (err: any) {
+      console.warn('Erro toggleFavoriteLocal', err);
+      Toast.show({ type: 'error', text1: 'Erro ao atualizar favorito', text2: String(err.message ?? err) });
+    }
+  };
+
 
   const renderItem = ({ item }: { item: FoodItem }) => {
     const qty = selected[item.id] ?? 0;
+    const isFav = favoriteIdsLocal.has(item.id);
     return (
       <View style={localStyles.foodRow}>
         <View style={{ flex: 1 }}>
           <View style={localStyles.nameRow}>
             <Text style={localStyles.foodName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
-            <GlycemicBadge level={item.glycemic} />
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => toggleFavoriteLocal(item.id)} style={{ marginRight: 8 }}>
+                <Ionicons name={isFav ? 'star' : 'star-outline'} size={18} color={isFav ? '#f1c40f' : '#999'} />
+              </TouchableOpacity>
+              <GlycemicBadge level={item.glycemic} />
+            </View>
           </View>
           {item.description ? <Text style={localStyles.foodDesc}>{item.description}</Text> : null}
           <View style={localStyles.foodMeta}>
@@ -522,9 +1007,16 @@ export function AddFoodScreen({ navigation, route, foods }: { navigation: any; r
         <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>{`Adicionar alimentos - ${meal}`}</Text>
 
         <TextInput placeholder="Buscar alimentos..." style={localStyles.searchInput} value={query} onChangeText={setQuery} returnKeyType="search" />
-        <TouchableOpacity style={{ marginTop: 12, borderRadius: 8, borderWidth: 1, borderColor: '#16a34a', paddingVertical: 10, alignItems: 'center' }} onPress={() => navigation.navigate('CreateFood')}>
-          <Text style={{ color: '#16a34a', fontWeight: '700' }}>+ Criar Novo Alimento</Text>
-        </TouchableOpacity>
+
+        <View style={{ flexDirection: 'row', marginTop: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+          <TouchableOpacity style={{ borderRadius: 8, borderWidth: 1, borderColor: '#16a34a', paddingVertical: 10, paddingHorizontal: 12 }} onPress={() => navigation.navigate('CreateFood')}>
+            <Text style={{ color: '#16a34a', fontWeight: '700' }}>+ Criar Novo Alimento</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={{ padding: 8 }} onPress={() => setFavoriteOnly(prev => !prev)}>
+            <Text style={{ color: favoriteOnly ? '#f1c40f' : '#666', fontWeight: '700' }}>{favoriteOnly ? 'Mostrando Favoritos' : 'Mostrar Favoritos'}</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={{ marginTop: 12, marginBottom: 8, color: '#666' }}>Alimentos recomendados</Text>
 
@@ -597,7 +1089,6 @@ export function CreateFoodScreen({ navigation, route, onCreated }: { navigation:
         if (typeof onCreated === 'function') {
           onCreated(newFood);
         }
-
         navigation.goBack();
       } else {
         Toast.show({ type: 'error', text1: 'Erro desconhecido', visibilityTime: 2500 });
@@ -629,7 +1120,6 @@ export function CreateFoodScreen({ navigation, route, onCreated }: { navigation:
     </SafeAreaView>
   );
 }
-
 
 const localStyles = StyleSheet.create({
   searchInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, marginTop: 8, backgroundColor: '#f7f7f7' },
@@ -673,6 +1163,13 @@ function HomeStack({ foods, setFoods }: { foods: FoodItem[]; setFoods: React.Dis
                 merged.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
                 return merged;
               });
+              (async () => {
+                try {
+                  const { data } = await supabase.from('favorites').select('food_id');
+                  if (data) {
+                  }
+                } catch (e) { /* ignore */ }
+              })();
             }}
           />
         }

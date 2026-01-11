@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { supabase } from './supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function MapScreen() {
   type Place = {
     id: string;
@@ -83,30 +84,39 @@ export default function MapScreen() {
        setLocation(location);
     })();
 
-    // 2. Parte do Usuário (ATUALIZADA)
+    // 2. Parte do Usuário (CORRIGIDA)
     (async () => {
-      // Pega o usuário logado
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        setCurrentUserId(user.id); // Salva o ID na memória
+        setCurrentUserId(user.id);
 
-        // AGORA VAI NO BANCO BUSCAR O NOME
         try {
+          // 1. Tenta buscar no Banco de Dados (Supabase)
           const { data } = await supabase
-            .from('user_stats') // Nome da tabela do perfil
+            .from('user_stats')
             .select('name')
             .eq('user_id', user.id)
             .maybeSingle();
 
           if (data && data.name) {
-            setCurrentUserName(data.name); // Achou o nome!
+            setCurrentUserName(data.name);
           } else {
-            // Se não achou, usa o começo do e-mail como apelido
-            setCurrentUserName(user.email?.split('@')[0] || "Anônimo");
+            // 2. Se não tem no banco, tenta buscar no Armazenamento Local (igual ao Perfil)
+            const localName = await AsyncStorage.getItem('lastLoggedUserName');
+            
+            if (localName) {
+              setCurrentUserName(localName);
+            } else {
+              // 3. Última opção: usa o e-mail
+              setCurrentUserName(user.email?.split('@')[0] || "Anônimo");
+            }
           }
         } catch (error) {
           console.log("Erro ao buscar nome:", error);
+          // Em caso de erro, tenta o local também
+          const localName = await AsyncStorage.getItem('lastLoggedUserName');
+          setCurrentUserName(localName || user.email?.split('@')[0] || "Anônimo");
         }
       }
     })();
